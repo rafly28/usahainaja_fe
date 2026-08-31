@@ -241,15 +241,21 @@ export const api = {
     categories: () => request<{ items: Category[] }>("/api/categories").then((data) => data.items ?? []),
     createCategory: (input: { name: string; category_type: string; parent_code?: string }) =>
       request<Category>("/api/categories", { method: "POST", body: input, mutation: true }),
+    updateCategory: (code: string, input: { name: string; category_type: string; parent_code?: string; status: string }) =>
+      request<Category>(`/api/categories/${code}`, { method: "PATCH", body: input, mutation: true }),
     units: () => request<{ items: Unit[] }>("/api/units").then((data) => data.items ?? []),
     createUnit: (input: { name: string; symbol: string; unit_type: string }) =>
       request<Unit>("/api/units", { method: "POST", body: input, mutation: true }),
+    updateUnit: (code: string, input: { name: string; symbol: string; unit_type: string; status: string }) =>
+      request<Unit>(`/api/units/${code}`, { method: "PATCH", body: input, mutation: true }),
     unitConversions: () => request<{ items: UnitConversion[] }>("/api/unit-conversions").then((data) => data.items ?? []),
     createUnitConversion: (input: { product_code?: string; from_unit_code: string; to_unit_code: string; multiplier: string }) =>
       request<UnitConversion>("/api/unit-conversions", { method: "POST", body: input, mutation: true }),
     locations: () => request<{ items: Location[] }>("/api/locations").then((data) => data.items ?? []),
     createLocation: (input: { name: string; type: string; address?: string; is_default: boolean }) =>
       request<Location>("/api/locations", { method: "POST", body: input, mutation: true }),
+    updateLocation: (code: string, input: { name: string; type: string; address?: string; is_default: boolean; status: string }) =>
+      request<Location>(`/api/locations/${code}`, { method: "PATCH", body: input, mutation: true }),
     parties: () => request<{ items: Party[] }>("/api/parties").then((data) => data.items ?? []),
     createParty: (input: {
       party_type: string;

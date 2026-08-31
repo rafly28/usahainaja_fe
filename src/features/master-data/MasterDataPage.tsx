@@ -113,6 +113,30 @@ export function MasterDataPage({ role }: { role: string }) {
     });
   }
 
+  async function toggleCategory(item: Category) {
+    await submit(async () => {
+      const status = item.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
+      await api.masterData.updateCategory(item.code, { name: item.name, category_type: item.category_type, parent_code: item.parent_code ?? undefined, status });
+      setSuccess(`Kategori ${item.name} ${status === "ACTIVE" ? "diaktifkan" : "dinonaktifkan"}.`);
+    });
+  }
+
+  async function toggleUnit(item: Unit) {
+    await submit(async () => {
+      const status = item.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
+      await api.masterData.updateUnit(item.code, { name: item.name, symbol: item.symbol, unit_type: item.unit_type, status });
+      setSuccess(`Satuan ${item.name} ${status === "ACTIVE" ? "diaktifkan" : "dinonaktifkan"}.`);
+    });
+  }
+
+  async function toggleLocation(item: Location) {
+    await submit(async () => {
+      const status = item.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
+      await api.masterData.updateLocation(item.code, { name: item.name, type: item.type, address: item.address, is_default: item.is_default, status });
+      setSuccess(`Lokasi ${item.name} ${status === "ACTIVE" ? "diaktifkan" : "dinonaktifkan"}.`);
+    });
+  }
+
   async function submitLocation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     await submit(async () => {
@@ -208,7 +232,7 @@ export function MasterDataPage({ role }: { role: string }) {
         <DataPanel
           title="Kategori"
           description="Kelompokkan produk, jasa, aset, atau biaya untuk pelaporan yang rapi."
-          list={<CategoryList items={categories} loading={loading} />}
+          list={<CategoryList items={categories} loading={loading} disabled={submitting} onToggle={toggleCategory} />}
         >
           <form className="form-stack" onSubmit={(event) => void submitCategory(event)}>
             <label className="field"><span>Nama kategori</span><input value={categoryName} onChange={(event) => setCategoryName(event.target.value)} placeholder="Contoh: Minuman dingin" required maxLength={150} /></label>
@@ -222,7 +246,7 @@ export function MasterDataPage({ role }: { role: string }) {
         <DataPanel
           title="Satuan"
           description="Tetapkan satuan baku seperti pcs, kg, liter, atau jam."
-          list={<UnitList items={units} loading={loading} />}
+          list={<UnitList items={units} loading={loading} disabled={submitting} onToggle={toggleUnit} />}
         >
           <form className="form-stack" onSubmit={(event) => void submitUnit(event)}>
             <label className="field"><span>Nama satuan</span><input value={unitName} onChange={(event) => setUnitName(event.target.value)} placeholder="Contoh: Kilogram" required maxLength={100} /></label>
@@ -248,7 +272,7 @@ export function MasterDataPage({ role }: { role: string }) {
         <DataPanel
           title="Lokasi"
           description="Atur toko, gudang, booth, atau lokasi event untuk operasional dan stok."
-          list={<LocationList items={locations} loading={loading} />}
+          list={<LocationList items={locations} loading={loading} disabled={submitting} onToggle={toggleLocation} />}
         >
           <form className="form-stack" onSubmit={(event) => void submitLocation(event)}>
             <label className="field"><span>Nama lokasi</span><input value={locationName} onChange={(event) => setLocationName(event.target.value)} placeholder="Contoh: Toko utama" required maxLength={150} /></label>
@@ -303,20 +327,20 @@ function ListState({ loading, empty, children }: { loading: boolean; empty: bool
   return <div className="master-data-list__items">{children}</div>;
 }
 
-function CategoryList({ items, loading }: { items: Category[]; loading: boolean }) {
-  return <ListState loading={loading} empty={items.length === 0}>{items.map((item) => <article className="master-data-row" key={item.code}><div><strong>{item.name}</strong><small>{item.code} · {translateCategory(item.category_type)}</small></div><Status value={item.status} /></article>)}</ListState>;
+function CategoryList({ items, loading, disabled, onToggle }: { items: Category[]; loading: boolean; disabled: boolean; onToggle: (item: Category) => Promise<void> }) {
+  return <ListState loading={loading} empty={items.length === 0}>{items.map((item) => <article className="master-data-row" key={item.code}><div><strong>{item.name}</strong><small>{item.code} · {translateCategory(item.category_type)}</small></div><div className="master-data-row__actions"><Status value={item.status} /><LifecycleButton disabled={disabled} item={item} onToggle={onToggle} /></div></article>)}</ListState>;
 }
 
-function UnitList({ items, loading }: { items: Unit[]; loading: boolean }) {
-  return <ListState loading={loading} empty={items.length === 0}>{items.map((item) => <article className="master-data-row" key={item.code}><div><strong>{item.name} <em>{item.symbol}</em></strong><small>{item.code} · {translateUnit(item.unit_type)}</small></div><Status value={item.status} /></article>)}</ListState>;
+function UnitList({ items, loading, disabled, onToggle }: { items: Unit[]; loading: boolean; disabled: boolean; onToggle: (item: Unit) => Promise<void> }) {
+  return <ListState loading={loading} empty={items.length === 0}>{items.map((item) => <article className="master-data-row" key={item.code}><div><strong>{item.name} <em>{item.symbol}</em></strong><small>{item.code} · {translateUnit(item.unit_type)}</small></div><div className="master-data-row__actions"><Status value={item.status} /><LifecycleButton disabled={disabled} item={item} onToggle={onToggle} /></div></article>)}</ListState>;
 }
 
 function ConversionList({ items, loading }: { items: UnitConversion[]; loading: boolean }) {
   return <ListState loading={loading} empty={items.length === 0}>{items.map((item) => <article className="master-data-row" key={`${item.product_code}-${item.from_unit_code}-${item.to_unit_code}`}><div><strong>{item.from_unit_code} → {item.to_unit_code}</strong><small>1 {item.from_unit_code} = {item.multiplier} {item.to_unit_code}</small></div></article>)}</ListState>;
 }
 
-function LocationList({ items, loading }: { items: Location[]; loading: boolean }) {
-  return <ListState loading={loading} empty={items.length === 0}>{items.map((item) => <article className="master-data-row" key={item.code}><div><strong>{item.name} {item.is_default && <em>Utama</em>}</strong><small>{item.code} · {translateLocation(item.type)}{item.address ? ` · ${item.address}` : ""}</small></div><Status value={item.status} /></article>)}</ListState>;
+function LocationList({ items, loading, disabled, onToggle }: { items: Location[]; loading: boolean; disabled: boolean; onToggle: (item: Location) => Promise<void> }) {
+  return <ListState loading={loading} empty={items.length === 0}>{items.map((item) => <article className="master-data-row" key={item.code}><div><strong>{item.name} {item.is_default && <em>Utama</em>}</strong><small>{item.code} · {translateLocation(item.type)}{item.address ? ` · ${item.address}` : ""}</small></div><div className="master-data-row__actions"><Status value={item.status} /><LifecycleButton disabled={disabled || item.is_default} item={item} onToggle={onToggle} /></div></article>)}</ListState>;
 }
 
 function PartyList({ items, loading }: { items: Party[]; loading: boolean }) {
@@ -339,6 +363,7 @@ function RoleSelect({ value, onChange, actorRole, disabled = false }: { value: s
 }
 
 function Status({ value }: { value: string }) { return <span className={`status-pill ${value === "ACTIVE" ? "status-pill--active" : ""}`}>{value === "ACTIVE" ? "Aktif" : "Nonaktif"}</span>; }
+function LifecycleButton<T extends { status: string }>({ item, disabled, onToggle }: { item: T; disabled: boolean; onToggle: (item: T) => Promise<void> }) { return <button className="link-button" disabled={disabled} onClick={() => void onToggle(item)} type="button">{item.status === "ACTIVE" ? "Nonaktifkan" : "Aktifkan"}</button>; }
 function translateCategory(value: string) { return ({ PRODUCT: "Produk", SERVICE: "Jasa", ASSET: "Aset", EXPENSE: "Biaya" } as Record<string, string>)[value] ?? value; }
 function translateUnit(value: string) { return ({ COUNT: "Hitungan", WEIGHT: "Berat", VOLUME: "Volume", TIME: "Waktu", OTHER: "Lainnya" } as Record<string, string>)[value] ?? value; }
 function translateLocation(value: string) { return ({ STORE: "Toko", WAREHOUSE: "Gudang", BOOTH: "Booth", EVENT_VENUE: "Lokasi event", OTHER: "Lainnya" } as Record<string, string>)[value] ?? value; }
