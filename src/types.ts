@@ -68,6 +68,12 @@ export type Business = {
   } | null;
 };
 
+export type Category = { code: string; name: string; category_type: string; parent_code?: string | null; status: string };
+export type Unit = { code: string; name: string; symbol: string; unit_type: string; status: string };
+export type Location = { code: string; name: string; type: string; address?: string; is_default: boolean; status: string };
+export type PartyContact = { type: string; label?: string; value: string; is_primary: boolean };
+export type Party = { code: string; party_type: string; display_name: string; legal_name?: string; status: string; relationships: string[]; contacts: PartyContact[] };
+
 export type Session = {
   user: User;
   active_business: Business | null;

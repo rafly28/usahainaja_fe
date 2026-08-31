@@ -12,6 +12,11 @@ import type {
   StockMovement,
   NewStockAdjustment,
   User,
+  Category,
+  Location,
+  Party,
+  PartyContact,
+  Unit,
 } from "../types";
 
 type ApiEnvelope<T> = {
@@ -222,6 +227,24 @@ export const api = {
         body: input,
         mutation: true,
       }),
+  },
+  masterData: {
+    categories: () => request<{ items: Category[] }>("/api/categories").then((data) => data.items ?? []),
+    createCategory: (input: { name: string; category_type: string; parent_code?: string }) =>
+      request<Category>("/api/categories", { method: "POST", body: input, mutation: true }),
+    units: () => request<{ items: Unit[] }>("/api/units").then((data) => data.items ?? []),
+    createUnit: (input: { name: string; symbol: string; unit_type: string }) =>
+      request<Unit>("/api/units", { method: "POST", body: input, mutation: true }),
+    locations: () => request<{ items: Location[] }>("/api/locations").then((data) => data.items ?? []),
+    createLocation: (input: { name: string; type: string; address?: string; is_default: boolean }) =>
+      request<Location>("/api/locations", { method: "POST", body: input, mutation: true }),
+    parties: () => request<{ items: Party[] }>("/api/parties").then((data) => data.items ?? []),
+    createParty: (input: {
+      party_type: string;
+      display_name: string;
+      relationships: string[];
+      contacts: PartyContact[];
+    }) => request<Party>("/api/parties", { method: "POST", body: input, mutation: true }),
   },
   products: {
     list: async (search?: string) => {

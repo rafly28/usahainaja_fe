@@ -18,8 +18,9 @@ import { StockAdjustmentsPage } from "../inventory/StockAdjustmentsPage";
 import { BusinessProfileDashboard } from "../business/BusinessProfileDashboard";
 import { BusinessSettings } from "../business/BusinessSettings";
 import { getBusinessProfile, getEnabledModules, isModuleEnabled } from "../business/businessProfile";
+import { MasterDataPage } from "../master-data/MasterDataPage";
 
-type View = "dashboard" | "products" | "opening-stock" | "movements" | "adjustments" | "business-settings";
+type View = "dashboard" | "products" | "opening-stock" | "movements" | "adjustments" | "business-settings" | "master-data";
 type NavigationItem = { id: View; label: string; icon: "home" | "box" | "plus" | "edit" };
 
 export function Workspace({
@@ -61,6 +62,7 @@ export function Workspace({
     if (catalogEnabled) items.push({ id: "products", label: "Produk", icon: "box" });
     if (inventoryEnabled) items.push({ id: "opening-stock", label: "Stok awal", icon: "plus" });
     if (["OWNER", "ADMIN"].includes(enrichedBusiness.role ?? activeBusiness.role ?? "")) {
+      items.push({ id: "master-data", label: "Data usaha", icon: "edit" });
       items.push({ id: "business-settings", label: "Pengaturan", icon: "edit" });
     }
     return items;
@@ -234,6 +236,7 @@ export function Workspace({
           {view === "business-settings" && (
             <BusinessSettings business={enrichedBusiness} onSaved={onBusinessUpdated} />
           )}
+          {view === "master-data" && <MasterDataPage />}
         </main>
       </div>
     </div>
