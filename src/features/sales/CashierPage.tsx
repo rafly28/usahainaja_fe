@@ -181,24 +181,46 @@ export function CashierPage({
         </div>
 
         <div className="pos-grid">
-          {filtered.map((product) => (
-            <button
-              key={getProductCode(product)}
-              className="pos-item-card"
-              onClick={() => addToCart(product)}
-            >
-              <div className="pos-item-card__abbr">
-                {product.name.slice(0, 1).toUpperCase()}
-              </div>
-              <div className="pos-item-card__info">
-                <strong>{product.name}</strong>
-                <p>{formatCurrency(product.default_selling_price)}</p>
-                <small className={Number(product.quantity) <= 0 ? "text-danger" : "text-muted"}>
-                  Stok: {Number(product.quantity)}
-                </small>
-              </div>
-            </button>
-          ))}
+          {filtered.map((product) => {
+            const code = getProductCode(product);
+            const inCart = cart.find((item) => item.product_code === code);
+            const stockQty = Number(product.quantity ?? 0);
+            const isOutOfStock = stockQty <= 0;
+
+            return (
+              <button
+                key={code}
+                className={`pos-item-card ${inCart ? "is-in-cart" : ""} ${isOutOfStock ? "is-out-of-stock" : ""}`}
+                onClick={() => addToCart(product)}
+                type="button"
+              >
+                <div className="pos-item-card__header">
+                  <div className="pos-item-card__abbr">
+                    {product.name.slice(0, 1).toUpperCase()}
+                  </div>
+                  {inCart && (
+                    <span className="pos-item-card__cart-badge">
+                      {inCart.quantity}x
+                    </span>
+                  )}
+                </div>
+                <div className="pos-item-card__info">
+                  <strong title={product.name}>{product.name}</strong>
+                  {product.category_name && (
+                    <span className="pos-item-card__category">{product.category_name}</span>
+                  )}
+                  <div className="pos-item-card__price-row">
+                    <p className="pos-item-card__price">
+                      {formatCurrency(product.default_selling_price)}
+                    </p>
+                    <span className={`stock-pill ${isOutOfStock ? "stock-pill--empty" : stockQty < 5 ? "stock-pill--low" : "stock-pill--ok"}`}>
+                      {isOutOfStock ? "Habis" : `Stok ${stockQty}`}
+                    </span>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
           {filtered.length === 0 && (
             <div className="pos-empty-search">
               Produk tidak ditemukan.

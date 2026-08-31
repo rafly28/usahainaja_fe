@@ -188,24 +188,45 @@ export function RestockPage({
         </div>
 
         <div className="pos-grid">
-          {filtered.map((product) => (
-            <button
-              key={getProductCode(product)}
-              className="pos-item-card"
-              onClick={() => addToCart(product)}
-            >
-              <div className="pos-item-card__abbr">
-                {product.name.slice(0, 1).toUpperCase()}
-              </div>
-              <div className="pos-item-card__info">
-                <strong>{product.name}</strong>
-                <p>{formatCurrency(product.default_purchase_price)}</p>
-                <small className="text-muted">
-                  Stok saat ini: {Number(product.quantity)}
-                </small>
-              </div>
-            </button>
-          ))}
+          {filtered.map((product) => {
+            const code = getProductCode(product);
+            const inCart = cart.find((item) => item.product_code === code);
+            const stockQty = Number(product.quantity ?? 0);
+
+            return (
+              <button
+                key={code}
+                className={`pos-item-card ${inCart ? "is-in-cart" : ""}`}
+                onClick={() => addToCart(product)}
+                type="button"
+              >
+                <div className="pos-item-card__header">
+                  <div className="pos-item-card__abbr">
+                    {product.name.slice(0, 1).toUpperCase()}
+                  </div>
+                  {inCart && (
+                    <span className="pos-item-card__cart-badge">
+                      {inCart.quantity} item
+                    </span>
+                  )}
+                </div>
+                <div className="pos-item-card__info">
+                  <strong title={product.name}>{product.name}</strong>
+                  {product.category_name && (
+                    <span className="pos-item-card__category">{product.category_name}</span>
+                  )}
+                  <div className="pos-item-card__price-row">
+                    <p className="pos-item-card__price">
+                      {formatCurrency(product.default_purchase_price)}
+                    </p>
+                    <span className="stock-pill stock-pill--muted">
+                      Stok saat ini: {stockQty}
+                    </span>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
           {filtered.length === 0 && (
             <div className="pos-empty-search">
               Produk tidak ditemukan.
