@@ -216,6 +216,12 @@ export const api = {
         body: input,
         mutation: true,
       }),
+    updateConfiguration: (input: { business_type: string; enabled_modules: string[] }) =>
+      request<Business>("/api/businesses/current/configuration", {
+        method: "PUT",
+        body: input,
+        mutation: true,
+      }),
   },
   products: {
     list: async (search?: string) => {

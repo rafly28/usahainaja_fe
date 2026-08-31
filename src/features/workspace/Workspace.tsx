@@ -16,22 +16,25 @@ import { ProductsPage } from "../products/ProductsPage";
 import { StockMovementsPage } from "../inventory/StockMovementsPage";
 import { StockAdjustmentsPage } from "../inventory/StockAdjustmentsPage";
 import { BusinessProfileDashboard } from "../business/BusinessProfileDashboard";
+import { BusinessSettings } from "../business/BusinessSettings";
 import { getBusinessProfile, getEnabledModules, isModuleEnabled } from "../business/businessProfile";
 
-type View = "dashboard" | "products" | "opening-stock" | "movements" | "adjustments";
-type NavigationItem = { id: View; label: string; icon: "home" | "box" | "plus" };
+type View = "dashboard" | "products" | "opening-stock" | "movements" | "adjustments" | "business-settings";
+type NavigationItem = { id: View; label: string; icon: "home" | "box" | "plus" | "edit" };
 
 export function Workspace({
   user,
   activeBusiness,
   businesses,
   onSwitchBusiness,
+  onBusinessUpdated,
   onLogout,
 }: {
   user: User;
   activeBusiness: Business;
   businesses: Business[];
   onSwitchBusiness: (code: string) => Promise<void>;
+  onBusinessUpdated: () => Promise<void>;
   onLogout: () => Promise<void>;
 }) {
   const [view, setView] = useState<View>("dashboard");
@@ -57,8 +60,11 @@ export function Workspace({
     const items: NavigationItem[] = [{ id: "dashboard", label: "Ringkasan", icon: "home" }];
     if (catalogEnabled) items.push({ id: "products", label: "Produk", icon: "box" });
     if (inventoryEnabled) items.push({ id: "opening-stock", label: "Stok awal", icon: "plus" });
+    if (["OWNER", "ADMIN"].includes(enrichedBusiness.role ?? activeBusiness.role ?? "")) {
+      items.push({ id: "business-settings", label: "Pengaturan", icon: "edit" });
+    }
     return items;
-  }, [catalogEnabled, inventoryEnabled]);
+  }, [activeBusiness.role, catalogEnabled, enrichedBusiness.role, inventoryEnabled]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -224,6 +230,9 @@ export function Workspace({
                 navigate("movements");
               }}
             />
+          )}
+          {view === "business-settings" && (
+            <BusinessSettings business={enrichedBusiness} onSaved={onBusinessUpdated} />
           )}
         </main>
       </div>

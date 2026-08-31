@@ -1089,6 +1089,64 @@ h2 {
   font-weight: 750;
 }
 
+.business-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  padding: clamp(22px, 4vw, 34px);
+}
+
+.module-settings {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.module-settings legend {
+  margin-bottom: 7px;
+  color: var(--green-900);
+  font-size: 1rem;
+  font-weight: 820;
+}
+
+.module-settings > p {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.module-settings__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.module-toggle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 46px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--green-900);
+  cursor: pointer;
+  font-size: 0.84rem;
+  font-weight: 740;
+}
+
+.module-toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--green-700);
+}
+
+.module-toggle.is-selected {
+  border-color: var(--green-500);
+  background: var(--green-100);
+}
+
 .page-stack {
   display: flex;
   flex-direction: column;
@@ -2237,7 +2295,8 @@ tbody tr:hover {
 
 @media (max-width: 620px) {
   .profile-preview ol,
-  .profile-plan__steps {
+  .profile-plan__steps,
+  .module-settings__grid {
     grid-template-columns: 1fr;
   }
 

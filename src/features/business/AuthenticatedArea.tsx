@@ -77,6 +77,7 @@ export function AuthenticatedArea({
       activeBusiness={session.active_business}
       businesses={businesses}
       onSwitchBusiness={chooseBusiness}
+      onBusinessUpdated={refreshEverything}
       onLogout={onLogout}
     />
   );
