@@ -104,10 +104,11 @@ export function ProductsPage({
         ) : (
           <div className="table-scroll">
             <table>
-              <thead><tr><th>Produk</th><th>Satuan</th><th>Harga beli</th><th>Harga jual</th><th>Stok minimum</th><th>Pelacakan</th><th style={{ width: 80 }}><span className="sr-only">Aksi</span></th></tr></thead>
+              <thead><tr><th>Produk</th><th>Kategori</th><th>Satuan</th><th>Harga beli</th><th>Harga jual</th><th>Stok minimum</th><th>Pelacakan</th><th style={{ width: 80 }}><span className="sr-only">Aksi</span></th></tr></thead>
               <tbody>{filtered.map((product) => (
                 <tr key={getProductCode(product)}>
                   <td><div className="product-cell"><span>{product.name.slice(0, 1).toUpperCase()}</span><div><strong>{product.name}</strong><small>{product.sku || getProductCode(product)}</small></div></div></td>
+                  <td>{product.category_name || "—"}</td>
                   <td>{getProductUnit(product)}</td>
                   <td>{formatCurrency(product.default_purchase_price)}</td>
                   <td><strong>{formatCurrency(product.default_selling_price)}</strong></td>

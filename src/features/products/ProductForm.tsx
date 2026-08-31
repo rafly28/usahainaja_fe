@@ -1,7 +1,7 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Alert, Spinner } from "../../components/Feedback";
 import { api, errorMessage } from "../../lib/api";
-import { getProductCode, type Product } from "../../types";
+import { getProductCode, type Category, type Product } from "../../types";
 
 type ProductFormProps = {
   product?: Product;
@@ -21,12 +21,16 @@ export function ProductForm({ product, onCreated, onUpdated, onCancel }: Product
   const [sku, setSku] = useState(product?.sku ?? (product ? getProductCode(product) : "") ?? "");
   const [barcode, setBarcode] = useState(product?.barcode ?? "");
   const [unit, setUnit] = useState(product?.base_unit_symbol ?? product?.unit_symbol ?? "PCS");
+  const [categoryCode, setCategoryCode] = useState(product?.category_code ?? "");
+  const [categories, setCategories] = useState<Category[]>([]);
   const [purchasePrice, setPurchasePrice] = useState(product?.default_purchase_price ? String(product.default_purchase_price) : "");
   const [sellingPrice, setSellingPrice] = useState(product?.default_selling_price ? String(product.default_selling_price) : "");
   const [minStock, setMinStock] = useState(product?.min_stock !== undefined ? String(product.min_stock) : "0");
   const [tracked, setTracked] = useState(product?.is_stock_tracked ?? true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => { void api.masterData.categories().then((items) => setCategories(items.filter((item) => item.category_type === "PRODUCT" && item.status === "ACTIVE"))).catch(() => setCategories([])); }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -46,6 +50,7 @@ export function ProductForm({ product, onCreated, onUpdated, onCancel }: Product
           sku: sku.trim() || undefined,
           barcode: barcode.trim() || undefined,
           base_unit_symbol: unit.trim().toUpperCase() || "PCS",
+          category_code: categoryCode || undefined,
           default_purchase_price: optionalNumber(purchasePrice),
           default_selling_price: optionalNumber(sellingPrice),
           min_stock: optionalNumber(minStock),
@@ -58,6 +63,7 @@ export function ProductForm({ product, onCreated, onUpdated, onCancel }: Product
           sku: sku.trim() || undefined,
           barcode: barcode.trim() || undefined,
           base_unit_symbol: unit.trim().toUpperCase() || "PCS",
+          category_code: categoryCode || undefined,
           default_purchase_price: optionalNumber(purchasePrice),
           default_selling_price: optionalNumber(sellingPrice),
           min_stock: optionalNumber(minStock),
@@ -108,6 +114,13 @@ export function ProductForm({ product, onCreated, onUpdated, onCancel }: Product
             <option value="GRAM">GRAM — gram</option>
             <option value="LITER">LITER — liter</option>
             <option value="ML">ML — mililiter</option>
+          </select>
+        </label>
+        <label className="field">
+          <span>Kategori</span>
+          <select value={categoryCode} onChange={(event) => setCategoryCode(event.target.value)}>
+            <option value="">Tanpa kategori</option>
+            {categories.map((category) => <option key={category.code} value={category.code}>{category.name}</option>)}
           </select>
         </label>
         <label className="field">

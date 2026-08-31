@@ -49,8 +49,8 @@ export function CashierPage({
         setContacts((conRes || []).filter(c => c.contact_type === 'CUSTOMER' || c.contact_type === 'BOTH'));
         setCashAccounts(cashRes || []);
         
-        if (locRes && locRes.length > 0) setLocationCode(locRes[0]?.public_code ?? "");
-        if (cashRes && cashRes.length > 0) setCashAccountCode(cashRes[0]?.public_code ?? "");
+        if (locRes && locRes.length > 0) setLocationCode(locRes[0]?.code ?? locRes[0]?.public_code ?? "");
+        if (cashRes && cashRes.length > 0) setCashAccountCode(cashRes[0]?.code ?? cashRes[0]?.public_code ?? "");
       } catch (err) {
         // Silently ignore or log error
         console.error("Failed to load initial data", err);
@@ -285,9 +285,10 @@ export function CashierPage({
               className="payment-select"
             >
               <option value="" disabled>Pilih Lokasi</option>
-              {locations.map((loc) => (
-                <option key={loc.public_code} value={loc.public_code}>{loc.name}</option>
-              ))}
+              {locations.map((loc) => {
+                const code = loc.code ?? loc.public_code ?? "";
+                return <option key={code} value={code}>{loc.name}</option>;
+              })}
             </select>
             <select
               value={customerCode}
@@ -295,9 +296,10 @@ export function CashierPage({
               className="payment-select"
             >
               <option value="">Pelanggan Umum (Opsional)</option>
-              {contacts.map((c) => (
-                <option key={c.public_code} value={c.public_code}>{c.name}</option>
-              ))}
+              {contacts.map((c) => {
+                const code = c.code ?? c.public_code ?? "";
+                return <option key={code} value={code}>{c.name}</option>;
+              })}
             </select>
             <select
               value={cashAccountCode}
@@ -305,9 +307,10 @@ export function CashierPage({
               className="payment-select"
             >
               <option value="" disabled>Pilih Akun Kas</option>
-              {cashAccounts.map((ca) => (
-                <option key={ca.public_code} value={ca.public_code}>{ca.name}</option>
-              ))}
+              {cashAccounts.map((ca) => {
+                const code = ca.code ?? ca.public_code ?? "";
+                return <option key={code} value={code}>{ca.name}</option>;
+              })}
             </select>
             <button
               className="button button--primary button--large button--block"

@@ -68,6 +68,14 @@ export type Business = {
   } | null;
 };
 
+export type Category = { code: string; name: string; category_type: string; parent_code?: string | null; status: string };
+export type Unit = { code: string; name: string; symbol: string; unit_type: string; status: string };
+export type UnitConversion = { product_code?: string; from_unit_code: string; to_unit_code: string; multiplier: string };
+export type Location = { code: string; public_code?: string; name: string; type: string; address?: string; is_default: boolean; status: string };
+export type PartyContact = { type: string; label?: string; value: string; is_primary: boolean };
+export type Party = { code: string; party_type: string; display_name: string; legal_name?: string; status: string; relationships: string[]; contacts: PartyContact[] };
+export type BusinessMember = { user_code: string; name: string; email: string; role: string; status: "INVITED" | "ACTIVE" | "INACTIVE" };
+
 export type Session = {
   user: User;
   active_business: Business | null;
@@ -89,6 +97,8 @@ export type Product = {
   unit_symbol?: string;
   stock?: number | string;
   quantity?: number | string;
+  category_code?: string;
+  category_name?: string;
 };
 
 export type InventoryItem = {
@@ -118,6 +128,7 @@ export type CreateProductInput = {
   default_selling_price?: number;
   min_stock?: number;
   is_stock_tracked: boolean;
+  category_code?: string;
 };
 
 export type OpeningStockInput = {
@@ -176,28 +187,27 @@ export function getProductUnit(product: Product | InventoryItem): string {
   return product.unit_symbol ?? product.base_unit_symbol ?? product.base_unit ?? "PCS";
 }
 
-export type Location = {
-  public_code: string;
-  name: string;
-  type: string;
-  status: string;
-};
+export function getLocationCode(location: Location): string {
+  return location.code ?? location.public_code ?? "";
+}
 
 export type Contact = {
-  public_code: string;
+  code?: string;
+  public_code?: string;
   contact_type: string;
   name: string;
-  email: string;
-  phone: string;
-  address: string;
+  email?: string;
+  phone?: string;
+  address?: string;
   status: string;
 };
 
 export type CashAccount = {
-  public_code: string;
+  code?: string;
+  public_code?: string;
   name: string;
   type: string;
-  balance: string;
+  balance?: string;
   status: string;
 };
 
