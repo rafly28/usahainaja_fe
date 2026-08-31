@@ -184,8 +184,8 @@ export function CashierPage({
           {filtered.map((product) => {
             const code = getProductCode(product);
             const inCart = cart.find((item) => item.product_code === code);
-            const stockQty = Number(product.quantity ?? 0);
-            const isOutOfStock = stockQty <= 0;
+            const stockQty = Number(product.quantity ?? product.stock ?? 0);
+            const isOutOfStock = product.is_stock_tracked !== false && stockQty <= 0;
 
             return (
               <button

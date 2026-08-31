@@ -5,6 +5,7 @@ import { Icon } from "../../components/Icons";
 import { api, errorMessage } from "../../lib/api";
 import {
   getBusinessCode,
+  getProductCode,
   type Business,
   type InventoryItem,
   type Product,
@@ -78,9 +79,11 @@ export function Workspace({
   const loadData = useCallback(async () => {
     setLoading(true);
     setDataError("");
+    const shouldLoadCatalog = catalogEnabled || salesEnabled || purchaseEnabled;
+    const shouldLoadInventory = inventoryEnabled || salesEnabled || purchaseEnabled;
     const [productResult, inventoryResult] = await Promise.allSettled([
-      catalogEnabled ? api.products.list() : Promise.resolve([] as Product[]),
-      inventoryEnabled ? api.inventory.list() : Promise.resolve([] as InventoryItem[]),
+      shouldLoadCatalog ? api.products.list() : Promise.resolve([] as Product[]),
+      shouldLoadInventory ? api.inventory.list() : Promise.resolve([] as InventoryItem[]),
     ]);
 
     const errors: string[] = [];
@@ -91,7 +94,25 @@ export function Workspace({
 
     if (errors.length > 0) setDataError([...new Set(errors)].join(" "));
     setLoading(false);
-  }, [catalogEnabled, inventoryEnabled]);
+  }, [catalogEnabled, inventoryEnabled, salesEnabled, purchaseEnabled]);
+
+  const enrichedProducts = useMemo(() => {
+    return products.map((prod) => {
+      const prodCode = getProductCode(prod);
+      const matchingInventory = inventory.filter(
+        (inv) => getProductCode(inv) === prodCode
+      );
+      const totalQty = matchingInventory.reduce(
+        (acc, curr) => acc + Number(curr.quantity ?? curr.stock ?? 0),
+        0
+      );
+      return {
+        ...prod,
+        quantity: totalQty,
+        stock: totalQty,
+      };
+    });
+  }, [products, inventory]);
 
   useEffect(() => {
     void loadData();
@@ -246,7 +267,7 @@ export function Workspace({
           {view === "master-data" && <MasterDataPage role={enrichedBusiness.role ?? activeBusiness.role ?? ""} />}
           {view === "cashier" && (
             <CashierPage 
-              products={products} 
+              products={enrichedProducts} 
               onSaleCreated={async (receipt) => {
                 await loadData();
                 setSuccess(`Transaksi penjualan ${receipt} berhasil.`);
@@ -257,7 +278,7 @@ export function Workspace({
           )}
           {view === "restock" && (
             <RestockPage 
-              products={products} 
+              products={enrichedProducts} 
               onPurchaseCreated={async (purchase) => {
                 await loadData();
                 setSuccess(`Transaksi pembelian ${purchase} berhasil diproses.`);
