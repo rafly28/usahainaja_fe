@@ -13,31 +13,28 @@ import {
 import { InventoryDashboard } from "../inventory/InventoryDashboard";
 import { OpeningStockPage } from "../inventory/OpeningStockPage";
 import { ProductsPage } from "../products/ProductsPage";
-import { CashierPage } from "../sales/CashierPage";
-import { RestockPage } from "../purchases/RestockPage";
-
 import { StockMovementsPage } from "../inventory/StockMovementsPage";
 import { StockAdjustmentsPage } from "../inventory/StockAdjustmentsPage";
+import { BusinessProfileDashboard } from "../business/BusinessProfileDashboard";
+import { BusinessSettings } from "../business/BusinessSettings";
+import { getBusinessProfile, getEnabledModules, isModuleEnabled } from "../business/businessProfile";
 
-type View = "dashboard" | "products" | "opening-stock" | "cashier" | "restock" | "movements" | "adjustments";
-
-const navItems: Array<{ id: View; label: string; icon: "home" | "box" | "plus" | "shopping-cart" | "truck" }> = [
-  { id: "dashboard", label: "Ringkasan", icon: "home" },
-  { id: "products", label: "Produk", icon: "box" },
-  { id: "opening-stock", label: "Stok awal", icon: "plus" },
-];
+type View = "dashboard" | "products" | "opening-stock" | "movements" | "adjustments" | "business-settings";
+type NavigationItem = { id: View; label: string; icon: "home" | "box" | "plus" | "edit" };
 
 export function Workspace({
   user,
   activeBusiness,
   businesses,
   onSwitchBusiness,
+  onBusinessUpdated,
   onLogout,
 }: {
   user: User;
   activeBusiness: Business;
   businesses: Business[];
   onSwitchBusiness: (code: string) => Promise<void>;
+  onBusinessUpdated: () => Promise<void>;
   onLogout: () => Promise<void>;
 }) {
   const [view, setView] = useState<View>("dashboard");
@@ -55,13 +52,26 @@ export function Workspace({
     () => businesses.find((business) => getBusinessCode(business) === activeCode) ?? activeBusiness,
     [activeBusiness, activeCode, businesses],
   );
+  const profile = getBusinessProfile(enrichedBusiness.business_type);
+  const enabledModules = getEnabledModules(enrichedBusiness);
+  const catalogEnabled = isModuleEnabled(enabledModules, "CATALOG");
+  const inventoryEnabled = isModuleEnabled(enabledModules, "INVENTORY");
+  const navItems = useMemo<NavigationItem[]>(() => {
+    const items: NavigationItem[] = [{ id: "dashboard", label: "Ringkasan", icon: "home" }];
+    if (catalogEnabled) items.push({ id: "products", label: "Produk", icon: "box" });
+    if (inventoryEnabled) items.push({ id: "opening-stock", label: "Stok awal", icon: "plus" });
+    if (["OWNER", "ADMIN"].includes(enrichedBusiness.role ?? activeBusiness.role ?? "")) {
+      items.push({ id: "business-settings", label: "Pengaturan", icon: "edit" });
+    }
+    return items;
+  }, [activeBusiness.role, catalogEnabled, enrichedBusiness.role, inventoryEnabled]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     setDataError("");
     const [productResult, inventoryResult] = await Promise.allSettled([
-      api.products.list(),
-      api.inventory.list(),
+      catalogEnabled ? api.products.list() : Promise.resolve([] as Product[]),
+      inventoryEnabled ? api.inventory.list() : Promise.resolve([] as InventoryItem[]),
     ]);
 
     const errors: string[] = [];
@@ -72,11 +82,17 @@ export function Workspace({
 
     if (errors.length > 0) setDataError([...new Set(errors)].join(" "));
     setLoading(false);
-  }, []);
+  }, [catalogEnabled, inventoryEnabled]);
 
   useEffect(() => {
     void loadData();
   }, [activeCode, loadData]);
+
+  useEffect(() => {
+    if ((view === "products" && !catalogEnabled) || (view === "opening-stock" && !inventoryEnabled)) {
+      setView("dashboard");
+    }
+  }, [catalogEnabled, inventoryEnabled, view]);
 
   function navigate(nextView: View) {
     setView(nextView);
@@ -131,8 +147,8 @@ export function Workspace({
           ))}
         </nav>
         <div className="sidebar__help">
-          <strong>Milestone pertama</strong>
-          <p>Produk dan stok awal sudah siap dipakai.</p>
+          <strong>{profile.label}</strong>
+          <p>{profile.description}</p>
         </div>
         <div className="sidebar__user">
           <span>{user.name.slice(0, 1).toUpperCase()}</span>
@@ -172,15 +188,17 @@ export function Workspace({
 
         <main className="workspace__content">
           {view === "dashboard" && (
-            <InventoryDashboard
-              inventory={inventory}
-              error={dataError}
-              onRetry={() => void loadData()}
-              onGoToProducts={() => navigate("products")}
-              onGoToOpeningStock={() => navigate("opening-stock")}
-              onGoToMovements={() => navigate("movements")}
-              onGoToAdjustments={() => navigate("adjustments")}
-            />
+            inventoryEnabled ? (
+              <InventoryDashboard
+                inventory={inventory}
+                error={dataError}
+                onRetry={() => void loadData()}
+                onGoToProducts={() => navigate("products")}
+                onGoToOpeningStock={() => navigate("opening-stock")}
+                onGoToMovements={() => navigate("movements")}
+                onGoToAdjustments={() => navigate("adjustments")}
+              />
+            ) : <BusinessProfileDashboard profile={profile} modules={enabledModules} />
           )}
           {view === "products" && (
             <ProductsPage
@@ -200,28 +218,6 @@ export function Workspace({
               onGoToProducts={() => navigate("products")}
             />
           )}
-          {view === "cashier" && (
-            <CashierPage
-              products={products}
-              onSaleCreated={async (receipt) => {
-                await loadData();
-                setSuccess(`Penjualan berhasil! No Resi: ${receipt}`);
-                navigate("dashboard");
-              }}
-              onGoToProducts={() => navigate("products")}
-            />
-          )}
-          {view === "restock" && (
-            <RestockPage
-              products={products}
-              onPurchaseCreated={async (purchaseNo) => {
-                await loadData();
-                setSuccess(`Pembelian berhasil! No Pembelian: ${purchaseNo}`);
-                navigate("dashboard");
-              }}
-              onGoToProducts={() => navigate("products")}
-            />
-          )}
           {view === "movements" && (
             <StockMovementsPage onGoBack={() => navigate("dashboard")} />
           )}
@@ -234,6 +230,9 @@ export function Workspace({
                 navigate("movements");
               }}
             />
+          )}
+          {view === "business-settings" && (
+            <BusinessSettings business={enrichedBusiness} onSaved={onBusinessUpdated} />
           )}
         </main>
       </div>

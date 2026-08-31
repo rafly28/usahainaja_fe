@@ -2,13 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Brand } from "../../components/Brand";
 import { Alert, Spinner } from "../../components/Feedback";
 import { api, errorMessage } from "../../lib/api";
-
-const businessTypes = [
-  { value: "RETAIL", label: "Toko / Retail", description: "Produk fisik dan stok harian" },
-  { value: "SERVICE", label: "Jasa", description: "Layanan, pesanan, dan jadwal" },
-  { value: "ENTERTAINMENT", label: "Event / Hiburan", description: "Booking dan kebutuhan acara" },
-  { value: "OTHER", label: "Lainnya", description: "Model usaha lainnya" },
-];
+import { businessTypeOptions, getBusinessProfile } from "./businessProfile";
 
 export function BusinessOnboarding({
   onCreated,
@@ -21,6 +15,7 @@ export function BusinessOnboarding({
   const [businessType, setBusinessType] = useState("RETAIL");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const selectedProfile = getBusinessProfile(businessType);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -78,7 +73,7 @@ export function BusinessOnboarding({
           <fieldset className="business-type-fieldset">
             <legend>Jenis usaha</legend>
             <div className="business-type-grid">
-              {businessTypes.map((type) => (
+              {businessTypeOptions.map((type) => (
                 <label
                   key={type.value}
                   className={`choice-card ${businessType === type.value ? "is-selected" : ""}`}
@@ -97,6 +92,12 @@ export function BusinessOnboarding({
               ))}
             </div>
           </fieldset>
+
+          <aside className="profile-preview" aria-live="polite">
+            <strong>Setelah ruang usaha dibuat</strong>
+            <p>{selectedProfile.description}</p>
+            <ol>{selectedProfile.onboardingSteps.map((step) => <li key={step}>{step}</li>)}</ol>
+          </aside>
 
           <button className="button button--primary button--full" disabled={submitting}>
             {submitting && <Spinner />}
