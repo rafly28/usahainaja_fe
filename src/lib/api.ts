@@ -234,32 +234,50 @@ export const api = {
       }),
   },
   members: {
-    list: () => request<{ items: BusinessMember[] }>("/api/businesses/current/members").then((data) => data.items ?? []),
+    list: async () => {
+      const data = await request<unknown>("/api/businesses/current/members");
+      return extractCollection<BusinessMember>(data, ["items", "members"]);
+    },
     invite: (input: { email: string; role: string }) =>
       request<BusinessMember>("/api/businesses/current/members", { method: "POST", body: input, mutation: true }),
     update: (userCode: string, input: { role: string; status: string }) =>
       request<BusinessMember>(`/api/businesses/current/members/${userCode}`, { method: "PATCH", body: input, mutation: true }),
   },
   masterData: {
-    categories: () => request<{ items: Category[] }>("/api/categories").then((data) => data.items ?? []),
+    categories: async () => {
+      const data = await request<unknown>("/api/categories");
+      return extractCollection<Category>(data, ["items", "categories"]);
+    },
     createCategory: (input: { name: string; category_type: string; parent_code?: string }) =>
       request<Category>("/api/categories", { method: "POST", body: input, mutation: true }),
     updateCategory: (code: string, input: { name: string; category_type: string; parent_code?: string; status: string }) =>
       request<Category>(`/api/categories/${code}`, { method: "PATCH", body: input, mutation: true }),
-    units: () => request<{ items: Unit[] }>("/api/units").then((data) => data.items ?? []),
+    units: async () => {
+      const data = await request<unknown>("/api/units");
+      return extractCollection<Unit>(data, ["items", "units"]);
+    },
     createUnit: (input: { name: string; symbol: string; unit_type: string }) =>
       request<Unit>("/api/units", { method: "POST", body: input, mutation: true }),
     updateUnit: (code: string, input: { name: string; symbol: string; unit_type: string; status: string }) =>
       request<Unit>(`/api/units/${code}`, { method: "PATCH", body: input, mutation: true }),
-    unitConversions: () => request<{ items: UnitConversion[] }>("/api/unit-conversions").then((data) => data.items ?? []),
+    unitConversions: async () => {
+      const data = await request<unknown>("/api/unit-conversions");
+      return extractCollection<UnitConversion>(data, ["items", "conversions", "unit_conversions"]);
+    },
     createUnitConversion: (input: { product_code?: string; from_unit_code: string; to_unit_code: string; multiplier: string }) =>
       request<UnitConversion>("/api/unit-conversions", { method: "POST", body: input, mutation: true }),
-    locations: () => request<{ items: Location[] }>("/api/locations").then((data) => data.items ?? []),
+    locations: async () => {
+      const data = await request<unknown>("/api/locations");
+      return extractCollection<Location>(data, ["items", "locations"]);
+    },
     createLocation: (input: { name: string; type: string; address?: string; is_default: boolean }) =>
       request<Location>("/api/locations", { method: "POST", body: input, mutation: true }),
     updateLocation: (code: string, input: { name: string; type: string; address?: string; is_default: boolean; status: string }) =>
       request<Location>(`/api/locations/${code}`, { method: "PATCH", body: input, mutation: true }),
-    parties: () => request<{ items: Party[] }>("/api/parties").then((data) => data.items ?? []),
+    parties: async () => {
+      const data = await request<unknown>("/api/parties");
+      return extractCollection<Party>(data, ["items", "parties"]);
+    },
     createParty: (input: {
       party_type: string;
       display_name: string;
@@ -270,7 +288,7 @@ export const api = {
   products: {
     list: async (search?: string) => {
       const data = await request<unknown>(queryPath("/api/products", { search }));
-      return extractCollection<Product>(data, ["products"]);
+      return extractCollection<Product>(data, ["items", "products"]);
     },
     create: (input: CreateProductInput) =>
       request<Product>("/api/products", {
@@ -308,7 +326,7 @@ export const api = {
       }),
     movements: async () => {
       const data = await request<unknown>("/api/inventory/movements");
-      return extractCollection<StockMovement>(data, ["movements", "data"]);
+      return extractCollection<StockMovement>(data, ["movements", "data", "items"]);
     },
     createAdjustment: (input: NewStockAdjustment) =>
       request<StockAdjustment>("/api/inventory/adjustments", {
@@ -323,13 +341,22 @@ export const api = {
       }),
   },
   locations: {
-    list: () => request<Location[]>("/api/locations"),
+    list: async () => {
+      const data = await request<unknown>("/api/locations");
+      return extractCollection<Location>(data, ["items", "locations"]);
+    },
   },
   contacts: {
-    list: () => request<Contact[]>("/api/contacts"),
+    list: async () => {
+      const data = await request<unknown>("/api/contacts");
+      return extractCollection<Contact>(data, ["items", "contacts"]);
+    },
   },
   cashAccounts: {
-    list: () => request<CashAccount[]>("/api/cash-accounts"),
+    list: async () => {
+      const data = await request<unknown>("/api/cash-accounts");
+      return extractCollection<CashAccount>(data, ["items", "cash_accounts"]);
+    },
   },
   sales: {
     create: (input: NewSale) =>
