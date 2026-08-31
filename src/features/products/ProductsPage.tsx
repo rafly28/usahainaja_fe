@@ -114,8 +114,8 @@ export function ProductsPage({
                   <td>{formatNumber(product.min_stock)} {getProductUnit(product)}</td>
                   <td><span className={`status-pill ${product.is_stock_tracked === false ? "" : "status-pill--good"}`}><i />{product.is_stock_tracked === false ? "Tidak" : "Aktif"}</span></td>
                   <td className="actions-cell" style={{ display: "flex", gap: 4 }}>
-                    <button className="button button--ghost" type="button" onClick={() => { setEditingProduct(product); setShowForm(false); window.scrollTo(0, 0); }} title="Edit" style={{ padding: 8 }}><Icon name="edit" size={16} /></button>
-                    <button className="button button--ghost" type="button" onClick={() => remove(product)} title="Hapus" style={{ padding: 8, color: "var(--color-danger)" }}><Icon name="trash" size={16} /></button>
+                    <button className="button button--secondary" type="button" onClick={() => { setEditingProduct(product); setShowForm(false); window.scrollTo(0, 0); }} title="Edit" style={{ padding: 8 }}><Icon name="edit" size={16} /></button>
+                    <button className="button button--secondary" type="button" onClick={() => remove(product)} title="Hapus" style={{ padding: 8, color: "var(--color-danger)" }}><Icon name="trash" size={16} /></button>
                   </td>
                 </tr>
               ))}</tbody>
