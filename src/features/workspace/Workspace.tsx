@@ -18,9 +18,11 @@ import { StockAdjustmentsPage } from "../inventory/StockAdjustmentsPage";
 import { BusinessProfileDashboard } from "../business/BusinessProfileDashboard";
 import { BusinessSettings } from "../business/BusinessSettings";
 import { getBusinessProfile, getEnabledModules, isModuleEnabled } from "../business/businessProfile";
+import { CashierPage } from "../sales/CashierPage";
+import { RestockPage } from "../purchases/RestockPage";
 
-type View = "dashboard" | "products" | "opening-stock" | "movements" | "adjustments" | "business-settings";
-type NavigationItem = { id: View; label: string; icon: "home" | "box" | "plus" | "edit" };
+type View = "dashboard" | "products" | "opening-stock" | "movements" | "adjustments" | "business-settings" | "cashier" | "restock";
+type NavigationItem = { id: View; label: string; icon: "home" | "box" | "plus" | "edit" | "shopping-cart" | "truck" };
 
 export function Workspace({
   user,
@@ -56,15 +58,20 @@ export function Workspace({
   const enabledModules = getEnabledModules(enrichedBusiness);
   const catalogEnabled = isModuleEnabled(enabledModules, "CATALOG");
   const inventoryEnabled = isModuleEnabled(enabledModules, "INVENTORY");
+  const salesEnabled = isModuleEnabled(enabledModules, "SALES");
+  const purchaseEnabled = isModuleEnabled(enabledModules, "PURCHASE");
+  
   const navItems = useMemo<NavigationItem[]>(() => {
     const items: NavigationItem[] = [{ id: "dashboard", label: "Ringkasan", icon: "home" }];
+    if (salesEnabled) items.push({ id: "cashier", label: "Kasir (POS)", icon: "shopping-cart" });
+    if (purchaseEnabled) items.push({ id: "restock", label: "Pembelian", icon: "truck" });
     if (catalogEnabled) items.push({ id: "products", label: "Produk", icon: "box" });
     if (inventoryEnabled) items.push({ id: "opening-stock", label: "Stok awal", icon: "plus" });
     if (["OWNER", "ADMIN"].includes(enrichedBusiness.role ?? activeBusiness.role ?? "")) {
       items.push({ id: "business-settings", label: "Pengaturan", icon: "edit" });
     }
     return items;
-  }, [activeBusiness.role, catalogEnabled, enrichedBusiness.role, inventoryEnabled]);
+  }, [activeBusiness.role, catalogEnabled, enrichedBusiness.role, inventoryEnabled, salesEnabled, purchaseEnabled]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -233,6 +240,28 @@ export function Workspace({
           )}
           {view === "business-settings" && (
             <BusinessSettings business={enrichedBusiness} onSaved={onBusinessUpdated} />
+          )}
+          {view === "cashier" && (
+            <CashierPage 
+              products={products} 
+              onSaleCreated={async (receipt) => {
+                await loadData();
+                setSuccess(`Transaksi penjualan ${receipt} berhasil.`);
+                navigate("dashboard");
+              }} 
+              onGoToProducts={() => navigate("products")} 
+            />
+          )}
+          {view === "restock" && (
+            <RestockPage 
+              products={products} 
+              onPurchaseCreated={async (purchase) => {
+                await loadData();
+                setSuccess(`Transaksi pembelian ${purchase} berhasil diproses.`);
+                navigate("dashboard");
+              }} 
+              onGoToProducts={() => navigate("products")} 
+            />
           )}
         </main>
       </div>
