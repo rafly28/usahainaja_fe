@@ -61,6 +61,7 @@ export type Business = {
   timezone?: string;
   currency?: string;
   role?: string;
+  enabled_modules?: string[];
   default_location?: {
     code: string;
     name: string;
