@@ -18,6 +18,7 @@ import type {
   Party,
   PartyContact,
   Unit,
+  UnitConversion,
 } from "../types";
 
 type ApiEnvelope<T> = {
@@ -243,6 +244,9 @@ export const api = {
     units: () => request<{ items: Unit[] }>("/api/units").then((data) => data.items ?? []),
     createUnit: (input: { name: string; symbol: string; unit_type: string }) =>
       request<Unit>("/api/units", { method: "POST", body: input, mutation: true }),
+    unitConversions: () => request<{ items: UnitConversion[] }>("/api/unit-conversions").then((data) => data.items ?? []),
+    createUnitConversion: (input: { product_code?: string; from_unit_code: string; to_unit_code: string; multiplier: string }) =>
+      request<UnitConversion>("/api/unit-conversions", { method: "POST", body: input, mutation: true }),
     locations: () => request<{ items: Location[] }>("/api/locations").then((data) => data.items ?? []),
     createLocation: (input: { name: string; type: string; address?: string; is_default: boolean }) =>
       request<Location>("/api/locations", { method: "POST", body: input, mutation: true }),

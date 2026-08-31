@@ -70,6 +70,7 @@ export type Business = {
 
 export type Category = { code: string; name: string; category_type: string; parent_code?: string | null; status: string };
 export type Unit = { code: string; name: string; symbol: string; unit_type: string; status: string };
+export type UnitConversion = { product_code?: string; from_unit_code: string; to_unit_code: string; multiplier: string };
 export type Location = { code: string; name: string; type: string; address?: string; is_default: boolean; status: string };
 export type PartyContact = { type: string; label?: string; value: string; is_primary: boolean };
 export type Party = { code: string; party_type: string; display_name: string; legal_name?: string; status: string; relationships: string[]; contacts: PartyContact[] };
@@ -96,6 +97,8 @@ export type Product = {
   unit_symbol?: string;
   stock?: number | string;
   quantity?: number | string;
+  category_code?: string;
+  category_name?: string;
 };
 
 export type InventoryItem = {
@@ -125,6 +128,7 @@ export type CreateProductInput = {
   default_selling_price?: number;
   min_stock?: number;
   is_stock_tracked: boolean;
+  category_code?: string;
 };
 
 export type OpeningStockInput = {

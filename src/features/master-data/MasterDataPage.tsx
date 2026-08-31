@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Alert, Spinner } from "../../components/Feedback";
 import { api, errorMessage } from "../../lib/api";
-import type { BusinessMember, Category, Location, Party, Unit } from "../../types";
+import type { BusinessMember, Category, Location, Party, Unit, UnitConversion } from "../../types";
 
-type Tab = "categories" | "units" | "locations" | "parties" | "members";
+type Tab = "categories" | "units" | "conversions" | "locations" | "parties" | "members";
 
 const tabs: { id: Tab; label: string }[] = [
   { id: "categories", label: "Kategori" },
   { id: "units", label: "Satuan" },
+  { id: "conversions", label: "Konversi" },
   { id: "locations", label: "Lokasi" },
   { id: "parties", label: "Relasi" },
   { id: "members", label: "Tim usaha" },
@@ -17,6 +18,7 @@ export function MasterDataPage({ role }: { role: string }) {
   const [tab, setTab] = useState<Tab>("categories");
   const [categories, setCategories] = useState<Category[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
+  const [conversions, setConversions] = useState<UnitConversion[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [parties, setParties] = useState<Party[]>([]);
   const [members, setMembers] = useState<BusinessMember[]>([]);
@@ -30,6 +32,9 @@ export function MasterDataPage({ role }: { role: string }) {
   const [unitName, setUnitName] = useState("");
   const [unitSymbol, setUnitSymbol] = useState("");
   const [unitType, setUnitType] = useState("COUNT");
+  const [fromUnitCode, setFromUnitCode] = useState("");
+  const [toUnitCode, setToUnitCode] = useState("");
+  const [multiplier, setMultiplier] = useState("");
   const [locationName, setLocationName] = useState("");
   const [locationType, setLocationType] = useState("STORE");
   const [locationAddress, setLocationAddress] = useState("");
@@ -48,16 +53,19 @@ export function MasterDataPage({ role }: { role: string }) {
     const results = await Promise.allSettled([
       api.masterData.categories(),
       api.masterData.units(),
+      api.masterData.unitConversions(),
       api.masterData.locations(),
       api.masterData.parties(),
       api.members.list(),
     ]);
     const errors: string[] = [];
-    const [categoryResult, unitResult, locationResult, partyResult, memberResult] = results;
+    const [categoryResult, unitResult, conversionResult, locationResult, partyResult, memberResult] = results;
     if (categoryResult.status === "fulfilled") setCategories(categoryResult.value);
     else errors.push(errorMessage(categoryResult.reason));
     if (unitResult.status === "fulfilled") setUnits(unitResult.value);
     else errors.push(errorMessage(unitResult.reason));
+    if (conversionResult.status === "fulfilled") setConversions(conversionResult.value);
+    else errors.push(errorMessage(conversionResult.reason));
     if (locationResult.status === "fulfilled") setLocations(locationResult.value);
     else errors.push(errorMessage(locationResult.reason));
     if (partyResult.status === "fulfilled") setParties(partyResult.value);
@@ -94,6 +102,14 @@ export function MasterDataPage({ role }: { role: string }) {
       setUnitName("");
       setUnitSymbol("");
       setSuccess("Satuan berhasil ditambahkan.");
+    });
+  }
+
+  async function submitConversion(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await submit(async () => {
+      await api.masterData.createUnitConversion({ from_unit_code: fromUnitCode, to_unit_code: toUnitCode, multiplier });
+      setFromUnitCode(""); setToUnitCode(""); setMultiplier(""); setSuccess("Konversi satuan berhasil ditambahkan.");
     });
   }
 
@@ -217,6 +233,17 @@ export function MasterDataPage({ role }: { role: string }) {
         </DataPanel>
       )}
 
+      {tab === "conversions" && (
+        <DataPanel title="Konversi satuan" description="Tentukan berapa satuan tujuan yang setara dengan satu satuan asal." list={<ConversionList items={conversions} loading={loading} />}>
+          <form className="form-stack" onSubmit={(event) => void submitConversion(event)}>
+            <label className="field"><span>Satuan asal</span><select value={fromUnitCode} onChange={(event) => setFromUnitCode(event.target.value)} required><option value="">Pilih satuan</option>{units.filter((unit) => unit.status === "ACTIVE").map((unit) => <option key={unit.code} value={unit.code}>{unit.name} ({unit.symbol})</option>)}</select></label>
+            <label className="field"><span>Satuan tujuan</span><select value={toUnitCode} onChange={(event) => setToUnitCode(event.target.value)} required><option value="">Pilih satuan</option>{units.filter((unit) => unit.status === "ACTIVE").map((unit) => <option key={unit.code} value={unit.code}>{unit.name} ({unit.symbol})</option>)}</select></label>
+            <label className="field"><span>Multiplier</span><input value={multiplier} onChange={(event) => setMultiplier(event.target.value)} min="0.000001" placeholder="Contoh: 1000" required step="any" type="number" /></label>
+            <button className="button button--primary" disabled={submitting} type="submit">{submitting ? "Menyimpan..." : "Tambah konversi"}</button>
+          </form>
+        </DataPanel>
+      )}
+
       {tab === "locations" && (
         <DataPanel
           title="Lokasi"
@@ -282,6 +309,10 @@ function CategoryList({ items, loading }: { items: Category[]; loading: boolean 
 
 function UnitList({ items, loading }: { items: Unit[]; loading: boolean }) {
   return <ListState loading={loading} empty={items.length === 0}>{items.map((item) => <article className="master-data-row" key={item.code}><div><strong>{item.name} <em>{item.symbol}</em></strong><small>{item.code} · {translateUnit(item.unit_type)}</small></div><Status value={item.status} /></article>)}</ListState>;
+}
+
+function ConversionList({ items, loading }: { items: UnitConversion[]; loading: boolean }) {
+  return <ListState loading={loading} empty={items.length === 0}>{items.map((item) => <article className="master-data-row" key={`${item.product_code}-${item.from_unit_code}-${item.to_unit_code}`}><div><strong>{item.from_unit_code} → {item.to_unit_code}</strong><small>1 {item.from_unit_code} = {item.multiplier} {item.to_unit_code}</small></div></article>)}</ListState>;
 }
 
 function LocationList({ items, loading }: { items: Location[]; loading: boolean }) {
