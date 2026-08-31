@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Alert } from "../../components/Feedback";
 import { Icon } from "../../components/Icons";
-import { api, errorMessage } from "../../lib/api";
+import { api, errorMessage, ApiError } from "../../lib/api";
 import { formatCurrency } from "../../lib/format";
-import { getProductCode, type Product, type SaleItem } from "../../types";
+import { getProductCode, type Product, type SaleItem, type Location, type Contact, type CashAccount } from "../../types";
 
 type CartItem = SaleItem & {
   name: string;
@@ -23,9 +23,41 @@ export function CashierPage({
   const [cart, setCart] = useState<CartItem[]>([]);
   const [discountTotal, setDiscountTotal] = useState<number>(0);
   const [taxTotal, setTaxTotal] = useState<number>(0);
-  const [paymentStatus, setPaymentStatus] = useState<"PAID" | "UNPAID">("PAID");
+  
+  // Data for dropdowns
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [cashAccounts, setCashAccounts] = useState<CashAccount[]>([]);
+  
+  // Selected values
+  const [locationCode, setLocationCode] = useState("");
+  const [customerCode, setCustomerCode] = useState("");
+  const [cashAccountCode, setCashAccountCode] = useState("");
+  
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [locRes, conRes, cashRes] = await Promise.all([
+          api.locations.list(),
+          api.contacts.list(),
+          api.cashAccounts.list(),
+        ]);
+        setLocations(locRes || []);
+        setContacts((conRes || []).filter(c => c.contact_type === 'CUSTOMER' || c.contact_type === 'BOTH'));
+        setCashAccounts(cashRes || []);
+        
+        if (locRes && locRes.length > 0) setLocationCode(locRes[0]?.public_code ?? "");
+        if (cashRes && cashRes.length > 0) setCashAccountCode(cashRes[0]?.public_code ?? "");
+      } catch (err) {
+        // Silently ignore or log error
+        console.error("Failed to load initial data", err);
+      }
+    }
+    void loadData();
+  }, []);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("id");
@@ -80,12 +112,22 @@ export function CashierPage({
 
   async function checkout() {
     if (cart.length === 0) return;
+    if (!locationCode) {
+      setError("Pilih lokasi terlebih dahulu.");
+      return;
+    }
+    if (!cashAccountCode) {
+      setError("Pilih akun kas untuk pembayaran.");
+      return;
+    }
+
     setSubmitting(true);
     setError("");
     try {
       const response = await api.sales.create({
-        location_code: "LOC-DEFAULT", // Typically user selects this, hardcoded for now
-        payment_status: paymentStatus,
+        location_code: locationCode,
+        customer_code: customerCode || undefined,
+        payment_status: "PAID",
         discount_total: discountTotal,
         tax_total: taxTotal,
         items: cart.map((c) => ({
@@ -95,14 +137,24 @@ export function CashierPage({
           discount: c.discount,
         })),
       });
+
       if (response && response.receipt_number) {
+        await api.sales.checkout(response.receipt_number, {
+          amount: grandTotal,
+          cash_account_code: cashAccountCode,
+        });
+
         onSaleCreated(response.receipt_number);
         setCart([]);
         setDiscountTotal(0);
         setTaxTotal(0);
       }
     } catch (caught) {
-      setError(errorMessage(caught));
+      if (caught instanceof ApiError && caught.status === 409 && caught.code === "INSUFFICIENT_STOCK") {
+        setError("Gagal checkout: Stok produk tidak mencukupi di lokasi yang dipilih.");
+      } else {
+        setError(errorMessage(caught));
+      }
     } finally {
       setSubmitting(false);
     }
@@ -226,14 +278,36 @@ export function CashierPage({
 
           {error && <div className="mt-2"><Alert tone="error">{error}</Alert></div>}
 
-          <div className="pos-cart__payment">
+          <div className="pos-cart__payment" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             <select
-              value={paymentStatus}
-              onChange={(e) => setPaymentStatus(e.target.value as "PAID" | "UNPAID")}
+              value={locationCode}
+              onChange={(e) => setLocationCode(e.target.value)}
               className="payment-select"
             >
-              <option value="PAID">Lunas (Tunai/Transfer)</option>
-              <option value="UNPAID">Belum Dibayar (Kasbon)</option>
+              <option value="" disabled>Pilih Lokasi</option>
+              {locations.map((loc) => (
+                <option key={loc.public_code} value={loc.public_code}>{loc.name}</option>
+              ))}
+            </select>
+            <select
+              value={customerCode}
+              onChange={(e) => setCustomerCode(e.target.value)}
+              className="payment-select"
+            >
+              <option value="">Pelanggan Umum (Opsional)</option>
+              {contacts.map((c) => (
+                <option key={c.public_code} value={c.public_code}>{c.name}</option>
+              ))}
+            </select>
+            <select
+              value={cashAccountCode}
+              onChange={(e) => setCashAccountCode(e.target.value)}
+              className="payment-select"
+            >
+              <option value="" disabled>Pilih Akun Kas</option>
+              {cashAccounts.map((ca) => (
+                <option key={ca.public_code} value={ca.public_code}>{ca.name}</option>
+              ))}
             </select>
             <button
               className="button button--primary button--large button--block"

@@ -12,6 +12,10 @@ import type {
   StockMovement,
   NewStockAdjustment,
   User,
+  Location,
+  Contact,
+  CashAccount,
+  PaymentInput,
 } from "../types";
 
 type ApiEnvelope<T> = {
@@ -278,11 +282,32 @@ export const api = {
         mutation: true,
       }),
   },
+  locations: {
+    list: () => request<Location[]>("/api/locations"),
+  },
+  contacts: {
+    list: () => request<Contact[]>("/api/contacts"),
+  },
+  cashAccounts: {
+    list: () => request<CashAccount[]>("/api/cash-accounts"),
+  },
   sales: {
     create: (input: NewSale) =>
       request<{ receipt_number: string }>("/api/sales", {
         method: "POST",
         body: input,
+        mutation: true,
+      }),
+    checkout: (receiptNumber: string, input: PaymentInput) =>
+      request<{ receipt_number: string }>(`/api/sales/${receiptNumber}/checkout`, {
+        method: "POST",
+        body: input,
+        mutation: true,
+      }),
+    void: (receiptNumber: string, reason: string) =>
+      request<void>(`/api/sales/${receiptNumber}/void`, {
+        method: "POST",
+        body: { reason },
         mutation: true,
       }),
   },
@@ -291,6 +316,23 @@ export const api = {
       request<{ purchase_number: string }>("/api/purchases", {
         method: "POST",
         body: input,
+        mutation: true,
+      }),
+    receive: (purchaseNumber: string) =>
+      request<void>(`/api/purchases/${purchaseNumber}/receive`, {
+        method: "POST",
+        mutation: true,
+      }),
+    pay: (purchaseNumber: string, input: PaymentInput) =>
+      request<void>(`/api/purchases/${purchaseNumber}/payments`, {
+        method: "POST",
+        body: input,
+        mutation: true,
+      }),
+    void: (purchaseNumber: string, reason: string) =>
+      request<void>(`/api/purchases/${purchaseNumber}/void`, {
+        method: "POST",
+        body: { reason },
         mutation: true,
       }),
   },

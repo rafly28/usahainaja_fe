@@ -175,3 +175,35 @@ export function getProductCode(product: Product | InventoryItem): string {
 export function getProductUnit(product: Product | InventoryItem): string {
   return product.unit_symbol ?? product.base_unit_symbol ?? product.base_unit ?? "PCS";
 }
+
+export type Location = {
+  public_code: string;
+  name: string;
+  type: string;
+  status: string;
+};
+
+export type Contact = {
+  public_code: string;
+  contact_type: string;
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  status: string;
+};
+
+export type CashAccount = {
+  public_code: string;
+  name: string;
+  type: string;
+  balance: string;
+  status: string;
+};
+
+export type PaymentInput = {
+  amount: string | number;
+  cash_account_code: string;
+  reference_number?: string;
+  notes?: string;
+};

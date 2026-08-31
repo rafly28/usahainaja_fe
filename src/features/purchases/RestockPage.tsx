@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Alert } from "../../components/Feedback";
 import { Icon } from "../../components/Icons";
 import { api, errorMessage } from "../../lib/api";
 import { formatCurrency } from "../../lib/format";
-import { getProductCode, type Product, type PurchaseItem } from "../../types";
+import { getProductCode, type Product, type PurchaseItem, type Location, type Contact, type CashAccount } from "../../types";
 
 type RestockItem = PurchaseItem & {
   name: string;
@@ -22,10 +22,41 @@ export function RestockPage({
   const [cart, setCart] = useState<RestockItem[]>([]);
   const [discountTotal, setDiscountTotal] = useState<number>(0);
   const [taxTotal, setTaxTotal] = useState<number>(0);
-  const [paymentStatus, setPaymentStatus] = useState<"PAID" | "UNPAID">("PAID");
   const [referenceNumber, setReferenceNumber] = useState("");
+  
+  // Dropdown data
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [cashAccounts, setCashAccounts] = useState<CashAccount[]>([]);
+  
+  // Selected values
+  const [locationCode, setLocationCode] = useState("");
+  const [supplierCode, setSupplierCode] = useState("");
+  const [cashAccountCode, setCashAccountCode] = useState("");
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [locRes, conRes, cashRes] = await Promise.all([
+          api.locations.list(),
+          api.contacts.list(),
+          api.cashAccounts.list(),
+        ]);
+        setLocations(locRes || []);
+        setContacts((conRes || []).filter(c => c.contact_type === 'SUPPLIER' || c.contact_type === 'BOTH'));
+        setCashAccounts(cashRes || []);
+        
+        if (locRes && locRes.length > 0) setLocationCode(locRes[0]?.public_code ?? "");
+        if (cashRes && cashRes.length > 0) setCashAccountCode(cashRes[0]?.public_code ?? "");
+      } catch (err) {
+        console.error("Failed to load data", err);
+      }
+    }
+    void loadData();
+  }, []);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("id");
@@ -83,14 +114,24 @@ export function RestockPage({
     );
   }
 
-  async function checkout() {
+  async function submitAction(action: "draft" | "receive" | "pay") {
     if (cart.length === 0) return;
+    if (!locationCode) {
+      setError("Pilih lokasi terlebih dahulu.");
+      return;
+    }
+    if (action === "pay" && !cashAccountCode) {
+      setError("Pilih akun kas untuk pembayaran.");
+      return;
+    }
+
     setSubmitting(true);
     setError("");
     try {
       const response = await api.purchases.create({
-        location_code: "LOC-DEFAULT", // Typically user selects this, hardcoded for now
-        payment_status: paymentStatus,
+        location_code: locationCode,
+        supplier_code: supplierCode || undefined,
+        payment_status: "UNPAID", // Actually ignored by backend createPurchase but required by type
         reference_number: referenceNumber,
         discount_total: discountTotal,
         tax_total: taxTotal,
@@ -101,7 +142,18 @@ export function RestockPage({
           discount: c.discount,
         })),
       });
+
       if (response && response.purchase_number) {
+        if (action === "receive" || action === "pay") {
+          await api.purchases.receive(response.purchase_number);
+        }
+        if (action === "pay") {
+          await api.purchases.pay(response.purchase_number, {
+            amount: grandTotal,
+            cash_account_code: cashAccountCode,
+          });
+        }
+
         onPurchaseCreated(response.purchase_number);
         setCart([]);
         setDiscountTotal(0);
@@ -255,21 +307,60 @@ export function RestockPage({
 
           {error && <div className="mt-2"><Alert tone="error">{error}</Alert></div>}
 
-          <div className="pos-cart__payment">
+          <div className="pos-cart__payment" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             <select
-              value={paymentStatus}
-              onChange={(e) => setPaymentStatus(e.target.value as "PAID" | "UNPAID")}
+              value={locationCode}
+              onChange={(e) => setLocationCode(e.target.value)}
               className="payment-select"
             >
-              <option value="PAID">Sudah Dibayar (Lunas)</option>
-              <option value="UNPAID">Hutang (Belum Dibayar)</option>
+              <option value="" disabled>Pilih Lokasi Penerimaan</option>
+              {locations.map((loc) => (
+                <option key={loc.public_code} value={loc.public_code}>{loc.name}</option>
+              ))}
             </select>
+            <select
+              value={supplierCode}
+              onChange={(e) => setSupplierCode(e.target.value)}
+              className="payment-select"
+            >
+              <option value="">Pemasok Umum (Opsional)</option>
+              {contacts.map((c) => (
+                <option key={c.public_code} value={c.public_code}>{c.name}</option>
+              ))}
+            </select>
+            <select
+              value={cashAccountCode}
+              onChange={(e) => setCashAccountCode(e.target.value)}
+              className="payment-select"
+            >
+              <option value="" disabled>Pilih Akun Kas (Jika Langsung Bayar)</option>
+              {cashAccounts.map((ca) => (
+                <option key={ca.public_code} value={ca.public_code}>{ca.name}</option>
+              ))}
+            </select>
+            
+            <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+              <button
+                className="button button--secondary button--block"
+                onClick={() => void submitAction("draft")}
+                disabled={submitting || cart.length === 0}
+              >
+                Simpan Draft
+              </button>
+              <button
+                className="button button--secondary button--block"
+                onClick={() => void submitAction("receive")}
+                disabled={submitting || cart.length === 0}
+              >
+                Terima Barang
+              </button>
+            </div>
             <button
-              className="button button--primary button--large button--block"
-              onClick={() => void checkout()}
+              className="button button--primary button--large button--block mt-2"
+              onClick={() => void submitAction("pay")}
               disabled={submitting || cart.length === 0}
             >
-              {submitting ? "Memproses..." : "Simpan Pembelian"}
+              {submitting ? "Memproses..." : "Terima & Bayar"}
             </button>
           </div>
         </div>

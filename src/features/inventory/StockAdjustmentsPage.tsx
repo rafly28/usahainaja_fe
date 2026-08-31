@@ -187,7 +187,7 @@ export function StockAdjustmentsPage({
 
                   <label className="field" style={{ flex: 1, marginBottom: 0 }}>
                     <span className="sr-only">Kuantitas</span>
-                    <div className="input-with-suffix">
+                    <div className="input-suffix">
                       <input
                         type="number"
                         min="0.01"
@@ -197,7 +197,7 @@ export function StockAdjustmentsPage({
                         value={item.quantity}
                         onChange={(e) => updateItem(index, "quantity", e.target.value)}
                       />
-                      <span className="suffix muted">{selectedProduct ? getProductUnit(selectedProduct) : "Unit"}</span>
+                      <span>{selectedProduct ? getProductUnit(selectedProduct) : "Unit"}</span>
                     </div>
                   </label>
 
