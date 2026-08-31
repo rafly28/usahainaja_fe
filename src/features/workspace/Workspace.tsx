@@ -236,7 +236,7 @@ export function Workspace({
           {view === "business-settings" && (
             <BusinessSettings business={enrichedBusiness} onSaved={onBusinessUpdated} />
           )}
-          {view === "master-data" && <MasterDataPage />}
+          {view === "master-data" && <MasterDataPage role={enrichedBusiness.role ?? activeBusiness.role ?? ""} />}
         </main>
       </div>
     </div>

@@ -73,6 +73,7 @@ export type Unit = { code: string; name: string; symbol: string; unit_type: stri
 export type Location = { code: string; name: string; type: string; address?: string; is_default: boolean; status: string };
 export type PartyContact = { type: string; label?: string; value: string; is_primary: boolean };
 export type Party = { code: string; party_type: string; display_name: string; legal_name?: string; status: string; relationships: string[]; contacts: PartyContact[] };
+export type BusinessMember = { user_code: string; name: string; email: string; role: string; status: "INVITED" | "ACTIVE" | "INACTIVE" };
 
 export type Session = {
   user: User;

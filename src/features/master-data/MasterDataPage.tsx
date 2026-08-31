@@ -1,23 +1,25 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Alert, Spinner } from "../../components/Feedback";
 import { api, errorMessage } from "../../lib/api";
-import type { Category, Location, Party, Unit } from "../../types";
+import type { BusinessMember, Category, Location, Party, Unit } from "../../types";
 
-type Tab = "categories" | "units" | "locations" | "parties";
+type Tab = "categories" | "units" | "locations" | "parties" | "members";
 
 const tabs: { id: Tab; label: string }[] = [
   { id: "categories", label: "Kategori" },
   { id: "units", label: "Satuan" },
   { id: "locations", label: "Lokasi" },
   { id: "parties", label: "Relasi" },
+  { id: "members", label: "Tim usaha" },
 ];
 
-export function MasterDataPage() {
+export function MasterDataPage({ role }: { role: string }) {
   const [tab, setTab] = useState<Tab>("categories");
   const [categories, setCategories] = useState<Category[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [parties, setParties] = useState<Party[]>([]);
+  const [members, setMembers] = useState<BusinessMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -37,6 +39,8 @@ export function MasterDataPage() {
   const [partyRelationship, setPartyRelationship] = useState("CUSTOMER");
   const [contactType, setContactType] = useState("WHATSAPP");
   const [contactValue, setContactValue] = useState("");
+  const [memberEmail, setMemberEmail] = useState("");
+  const [memberRole, setMemberRole] = useState("VIEWER");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -46,9 +50,10 @@ export function MasterDataPage() {
       api.masterData.units(),
       api.masterData.locations(),
       api.masterData.parties(),
+      api.members.list(),
     ]);
     const errors: string[] = [];
-    const [categoryResult, unitResult, locationResult, partyResult] = results;
+    const [categoryResult, unitResult, locationResult, partyResult, memberResult] = results;
     if (categoryResult.status === "fulfilled") setCategories(categoryResult.value);
     else errors.push(errorMessage(categoryResult.reason));
     if (unitResult.status === "fulfilled") setUnits(unitResult.value);
@@ -57,6 +62,8 @@ export function MasterDataPage() {
     else errors.push(errorMessage(locationResult.reason));
     if (partyResult.status === "fulfilled") setParties(partyResult.value);
     else errors.push(errorMessage(partyResult.reason));
+    if (memberResult.status === "fulfilled") setMembers(memberResult.value);
+    else errors.push(errorMessage(memberResult.reason));
     if (errors.length > 0) setError([...new Set(errors)].join(" "));
     setLoading(false);
   }, []);
@@ -120,6 +127,23 @@ export function MasterDataPage() {
       setPartyName("");
       setContactValue("");
       setSuccess("Relasi usaha berhasil ditambahkan.");
+    });
+  }
+
+  async function submitMember(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await submit(async () => {
+      await api.members.invite({ email: memberEmail, role: memberRole });
+      setMemberEmail("");
+      setMemberRole("VIEWER");
+      setSuccess("Undangan anggota berhasil dibuat. Akun akan dapat masuk setelah diaktifkan.");
+    });
+  }
+
+  async function updateMember(member: BusinessMember, nextRole: string, nextStatus: string) {
+    await submit(async () => {
+      await api.members.update(member.user_code, { role: nextRole, status: nextStatus });
+      setSuccess(`Akses ${member.name} berhasil diperbarui.`);
     });
   }
 
@@ -224,6 +248,20 @@ export function MasterDataPage() {
           </form>
         </DataPanel>
       )}
+
+      {tab === "members" && (
+        <DataPanel
+          title="Anggota usaha"
+          description="Undang akun yang sudah terdaftar, lalu atur peran dan status aksesnya."
+          list={<MemberList items={members} loading={loading} actorRole={role} disabled={submitting} onUpdate={updateMember} />}
+        >
+          <form className="form-stack" onSubmit={(event) => void submitMember(event)}>
+            <label className="field"><span>Email akun terdaftar</span><input value={memberEmail} onChange={(event) => setMemberEmail(event.target.value)} placeholder="nama@email.com" required type="email" /></label>
+            <label className="field"><span>Role awal</span><RoleSelect value={memberRole} onChange={setMemberRole} actorRole={role} /></label>
+            <button className="button button--primary" disabled={submitting} type="submit">{submitting ? "Menyimpan..." : "Undang anggota"}</button>
+          </form>
+        </DataPanel>
+      )}
     </section>
   );
 }
@@ -252,6 +290,21 @@ function LocationList({ items, loading }: { items: Location[]; loading: boolean 
 
 function PartyList({ items, loading }: { items: Party[]; loading: boolean }) {
   return <ListState loading={loading} empty={items.length === 0}>{items.map((item) => <article className="master-data-row" key={item.code}><div><strong>{item.display_name}</strong><small>{item.code} · {item.relationships.map((relationship) => translateRelationship(relationship)).join(", ") || "Belum diberi peran"}</small></div><Status value={item.status} /></article>)}</ListState>;
+}
+
+function MemberList({ items, loading, actorRole, disabled, onUpdate }: { items: BusinessMember[]; loading: boolean; actorRole: string; disabled: boolean; onUpdate: (member: BusinessMember, role: string, status: string) => Promise<void> }) {
+  return <ListState loading={loading} empty={items.length === 0}>{items.map((member) => <MemberRow key={member.user_code} member={member} actorRole={actorRole} disabled={disabled} onUpdate={onUpdate} />)}</ListState>;
+}
+
+function MemberRow({ member, actorRole, disabled, onUpdate }: { member: BusinessMember; actorRole: string; disabled: boolean; onUpdate: (member: BusinessMember, role: string, status: string) => Promise<void> }) {
+  const [role, setRole] = useState(member.role);
+  const [status, setStatus] = useState<string>(member.status);
+  const ownerProtected = actorRole !== "OWNER" && member.role === "OWNER";
+  return <article className="master-data-member"><div><strong>{member.name}</strong><small>{member.email} · {member.user_code}</small></div><div className="master-data-member__controls"><RoleSelect value={role} onChange={setRole} actorRole={actorRole} disabled={ownerProtected || disabled} /><select aria-label={`Status ${member.name}`} value={status} disabled={ownerProtected || disabled} onChange={(event) => setStatus(event.target.value)}><option value="INVITED">Diundang</option><option value="ACTIVE">Aktif</option><option value="INACTIVE">Nonaktif</option></select><button className="button button--secondary" disabled={ownerProtected || disabled || (role === member.role && status === member.status)} onClick={() => void onUpdate(member, role, status)} type="button">Simpan</button></div></article>;
+}
+
+function RoleSelect({ value, onChange, actorRole, disabled = false }: { value: string; onChange: (value: string) => void; actorRole: string; disabled?: boolean }) {
+  return <select aria-label="Role anggota" disabled={disabled} value={value} onChange={(event) => onChange(event.target.value)}>{actorRole === "OWNER" && <option value="OWNER">Owner</option>}<option value="ADMIN">Admin</option><option value="CASHIER">Kasir</option><option value="STAFF">Staf</option><option value="VIEWER">Viewer</option></select>;
 }
 
 function Status({ value }: { value: string }) { return <span className={`status-pill ${value === "ACTIVE" ? "status-pill--active" : ""}`}>{value === "ACTIVE" ? "Aktif" : "Nonaktif"}</span>; }

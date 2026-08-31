@@ -1,5 +1,6 @@
 import type {
   Business,
+  BusinessMember,
   CreateProductInput,
   FieldErrors,
   InventoryItem,
@@ -227,6 +228,13 @@ export const api = {
         body: input,
         mutation: true,
       }),
+  },
+  members: {
+    list: () => request<{ items: BusinessMember[] }>("/api/businesses/current/members").then((data) => data.items ?? []),
+    invite: (input: { email: string; role: string }) =>
+      request<BusinessMember>("/api/businesses/current/members", { method: "POST", body: input, mutation: true }),
+    update: (userCode: string, input: { role: string; status: string }) =>
+      request<BusinessMember>(`/api/businesses/current/members/${userCode}`, { method: "PATCH", body: input, mutation: true }),
   },
   masterData: {
     categories: () => request<{ items: Category[] }>("/api/categories").then((data) => data.items ?? []),
