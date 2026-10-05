@@ -55,6 +55,7 @@ export class ApiError extends Error {
 }
 
 let csrfToken: string | null = null;
+let csrfInflight: Promise<string> | null = null;
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
@@ -92,26 +93,35 @@ async function readEnvelope<T>(response: Response): Promise<ApiEnvelope<T>> {
 
 async function ensureCsrfToken(): Promise<string> {
   if (csrfToken) return csrfToken;
+  if (csrfInflight) return csrfInflight;
 
-  const response = await fetch("/api/auth/csrf", {
-    method: "GET",
-    credentials: "include",
-    headers: { Accept: "application/json" },
-  });
-  const envelope = await readEnvelope<{ csrf_token?: string }>(response);
-  const token = envelope.data?.csrf_token;
+  csrfInflight = (async () => {
+    const response = await fetch("/api/auth/csrf", {
+      method: "GET",
+      credentials: "include",
+      headers: { Accept: "application/json" },
+    });
+    const envelope = await readEnvelope<{ csrf_token?: string }>(response);
+    const token = envelope.data?.csrf_token;
 
-  if (!response.ok || !token) {
-    throw new ApiError(
-      envelope.error?.message ?? "Tidak dapat menyiapkan keamanan formulir.",
-      response.status,
-      envelope.error?.code ?? "CSRF_UNAVAILABLE",
-      envelope.error?.fields,
-    );
+    if (!response.ok || !token) {
+      throw new ApiError(
+        envelope.error?.message ?? "Tidak dapat menyiapkan keamanan formulir.",
+        response.status,
+        envelope.error?.code ?? "CSRF_UNAVAILABLE",
+        envelope.error?.fields,
+      );
+    }
+
+    csrfToken = token;
+    return token;
+  })();
+
+  try {
+    return await csrfInflight;
+  } finally {
+    csrfInflight = null;
   }
-
-  csrfToken = token;
-  return token;
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -183,7 +193,7 @@ export const api = {
         "/api/auth/register",
         { method: "POST", body: input },
       );
-      csrfToken = null;
+      if (data?.csrf_token) csrfToken = data.csrf_token;
       return data;
     },
     login: async (input: { email: string; password: string }) => {
@@ -193,7 +203,7 @@ export const api = {
         business_required?: boolean;
         csrf_token?: string;
       }>("/api/auth/login", { method: "POST", body: input });
-      csrfToken = null;
+      if (data?.csrf_token) csrfToken = data.csrf_token;
       return data;
     },
     logout: async () => {
@@ -388,6 +398,7 @@ export const api = {
     receive: (purchaseNumber: string) =>
       request<void>(`/api/purchases/${purchaseNumber}/receive`, {
         method: "POST",
+        body: {},
         mutation: true,
       }),
     pay: (purchaseNumber: string, input: PaymentInput) =>
