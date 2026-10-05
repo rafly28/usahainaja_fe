@@ -36,6 +36,7 @@ export function CashierPage({
   
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [pendingReceipt, setPendingReceipt] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadData() {
@@ -54,6 +55,7 @@ export function CashierPage({
       } catch (err) {
         // Silently ignore or log error
         console.error("Failed to load initial data", err);
+        setError("Gagal memuat lokasi/kas. Periksa koneksi lalu muat ulang.");
       }
     }
     void loadData();
@@ -77,6 +79,7 @@ export function CashierPage({
   const grandTotal = subtotal - discountTotal + taxTotal;
 
   function addToCart(product: Product) {
+    if (submitting) return;
     setCart((prev) => {
       const code = getProductCode(product);
       const existing = prev.find((item) => item.product_code === code);
@@ -123,38 +126,69 @@ export function CashierPage({
 
     setSubmitting(true);
     setError("");
+    let receiptNumber: string | null = pendingReceipt;
     try {
-      const response = await api.sales.create({
-        location_code: locationCode,
-        customer_code: customerCode || undefined,
-        payment_status: "PAID",
-        discount_total: discountTotal,
-        tax_total: taxTotal,
-        items: cart.map((c) => ({
-          product_code: c.product_code,
-          quantity: c.quantity,
-          unit_price: c.unit_price,
-          discount: c.discount,
-        })),
+      if (!receiptNumber) {
+        const response = await api.sales.create({
+          location_code: locationCode,
+          customer_code: customerCode || undefined,
+          payment_status: "PAID",
+          discount_total: Math.max(0, discountTotal),
+          tax_total: Math.max(0, taxTotal),
+          items: cart.map((c) => ({
+            product_code: c.product_code,
+            quantity: c.quantity,
+            unit_price: c.unit_price,
+            discount: c.discount,
+          })),
+        });
+        receiptNumber = response?.receipt_number ?? null;
+        if (!receiptNumber) {
+          setError("Penjualan dibuat tetapi nomor struk tidak kembali. Cek riwayat sebelum retry.");
+          return;
+        }
+        setPendingReceipt(receiptNumber);
+      }
+
+      await api.sales.checkout(receiptNumber, {
+        amount: grandTotal,
+        cash_account_code: cashAccountCode,
       });
 
-      if (response && response.receipt_number) {
-        await api.sales.checkout(response.receipt_number, {
-          amount: grandTotal,
-          cash_account_code: cashAccountCode,
-        });
-
-        onSaleCreated(response.receipt_number);
-        setCart([]);
-        setDiscountTotal(0);
-        setTaxTotal(0);
-      }
+      onSaleCreated(receiptNumber);
+      setPendingReceipt(null);
+      setCart([]);
+      setDiscountTotal(0);
+      setTaxTotal(0);
     } catch (caught) {
       if (caught instanceof ApiError && caught.status === 409 && caught.code === "INSUFFICIENT_STOCK") {
         setError("Gagal checkout: Stok produk tidak mencukupi di lokasi yang dipilih.");
+      } else if (receiptNumber) {
+        setError(`${errorMessage(caught)} (Draft ${receiptNumber} tersimpan, silakan coba Bayar lagi.)`);
       } else {
         setError(errorMessage(caught));
       }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function retryPending() {
+    if (!pendingReceipt) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      await api.sales.checkout(pendingReceipt, {
+        amount: grandTotal,
+        cash_account_code: cashAccountCode,
+      });
+      onSaleCreated(pendingReceipt);
+      setPendingReceipt(null);
+      setCart([]);
+      setDiscountTotal(0);
+      setTaxTotal(0);
+    } catch (caught) {
+      setError(errorMessage(caught));
     } finally {
       setSubmitting(false);
     }
@@ -277,9 +311,10 @@ export function CashierPage({
             <span>Diskon Total</span>
             <input
               type="number"
+              min="0"
               className="summary-input"
               value={discountTotal || ""}
-              onChange={(e) => setDiscountTotal(Number(e.target.value))}
+              onChange={(e) => setDiscountTotal(Math.max(0, Number(e.target.value) || 0))}
               placeholder="0"
             />
           </div>
@@ -287,9 +322,10 @@ export function CashierPage({
             <span>Pajak (Tax)</span>
             <input
               type="number"
+              min="0"
               className="summary-input"
               value={taxTotal || ""}
-              onChange={(e) => setTaxTotal(Number(e.target.value))}
+              onChange={(e) => setTaxTotal(Math.max(0, Number(e.target.value) || 0))}
               placeholder="0"
             />
           </div>
@@ -299,6 +335,9 @@ export function CashierPage({
           </div>
 
           {error && <div className="mt-2"><Alert tone="error">{error}</Alert></div>}
+          {pendingReceipt && (
+            <div className="mt-2"><Alert tone="error">Draft {pendingReceipt} tersimpan. <button type="button" className="link-button" onClick={() => void retryPending()} disabled={submitting}>Coba bayar lagi</button></Alert></div>
+          )}
 
           <div className="pos-cart__payment" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             <select

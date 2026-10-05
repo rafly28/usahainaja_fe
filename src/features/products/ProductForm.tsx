@@ -17,6 +17,7 @@ function optionalNumber(value: string): number | undefined {
 }
 
 export function ProductForm({ product, onCreated, onUpdated, onCancel }: ProductFormProps) {
+  const productCode = product ? getProductCode(product) : "";
   const [name, setName] = useState(product?.name ?? "");
   const [sku, setSku] = useState(product?.sku ?? (product ? getProductCode(product) : "") ?? "");
   const [barcode, setBarcode] = useState(product?.barcode ?? "");
@@ -31,6 +32,21 @@ export function ProductForm({ product, onCreated, onUpdated, onCancel }: Product
   const [error, setError] = useState("");
 
   useEffect(() => { void api.masterData.categories().then((items) => setCategories(items.filter((item) => item.category_type === "PRODUCT" && item.status === "ACTIVE"))).catch(() => setCategories([])); }, []);
+
+  useEffect(() => {
+    setName(product?.name ?? "");
+    setSku(product?.sku ?? productCode ?? "");
+    setBarcode(product?.barcode ?? "");
+    setUnit(product?.base_unit_symbol ?? product?.unit_symbol ?? "PCS");
+    setCategoryCode(product?.category_code ?? "");
+    setPurchasePrice(product?.default_purchase_price ? String(product.default_purchase_price) : "");
+    setSellingPrice(product?.default_selling_price ? String(product.default_selling_price) : "");
+    setMinStock(product?.min_stock !== undefined ? String(product.min_stock) : "0");
+    setTracked(product?.is_stock_tracked ?? true);
+    setError("");
+    // Sync hanya saat ganti produk (by code), bukan tiap render parent.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productCode]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

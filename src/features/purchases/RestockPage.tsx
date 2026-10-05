@@ -36,6 +36,7 @@ export function RestockPage({
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [pendingPurchase, setPendingPurchase] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadData() {
@@ -127,41 +128,49 @@ export function RestockPage({
 
     setSubmitting(true);
     setError("");
+    let purchaseNumber: string | null = pendingPurchase;
     try {
-      const response = await api.purchases.create({
-        location_code: locationCode,
-        supplier_code: supplierCode || undefined,
-        payment_status: "UNPAID", // Actually ignored by backend createPurchase but required by type
-        reference_number: referenceNumber,
-        discount_total: discountTotal,
-        tax_total: taxTotal,
-        items: cart.map((c) => ({
-          product_code: c.product_code,
-          quantity: c.quantity,
-          unit_price: c.unit_price,
-          discount: c.discount,
-        })),
-      });
+      if (!purchaseNumber) {
+        const response = await api.purchases.create({
+          location_code: locationCode,
+          supplier_code: supplierCode || undefined,
+          payment_status: "UNPAID",
+          reference_number: referenceNumber,
+          discount_total: Math.max(0, discountTotal),
+          tax_total: Math.max(0, taxTotal),
+          items: cart.map((c) => ({
+            product_code: c.product_code,
+            quantity: c.quantity,
+            unit_price: c.unit_price,
+            discount: c.discount,
+          })),
+        });
 
-      if (response && response.purchase_number) {
-        if (action === "receive" || action === "pay") {
-          await api.purchases.receive(response.purchase_number);
+        purchaseNumber = response?.purchase_number ?? null;
+        if (!purchaseNumber) {
+          setError("Pembelian dibuat tetapi nomor pembelian tidak kembali. Cek riwayat sebelum retry.");
+          return;
         }
-        if (action === "pay") {
-          await api.purchases.pay(response.purchase_number, {
-            amount: grandTotal,
-            cash_account_code: cashAccountCode,
-          });
-        }
-
-        onPurchaseCreated(response.purchase_number);
-        setCart([]);
-        setDiscountTotal(0);
-        setTaxTotal(0);
-        setReferenceNumber("");
+        setPendingPurchase(purchaseNumber);
       }
+      if (action === "receive" || action === "pay") {
+        await api.purchases.receive(purchaseNumber);
+      }
+      if (action === "pay") {
+        await api.purchases.pay(purchaseNumber, {
+          amount: grandTotal,
+          cash_account_code: cashAccountCode,
+        });
+      }
+
+      onPurchaseCreated(purchaseNumber);
+      setPendingPurchase(null);
+      setCart([]);
+      setDiscountTotal(0);
+      setTaxTotal(0);
+      setReferenceNumber("");
     } catch (caught) {
-      setError(errorMessage(caught));
+      setError(purchaseNumber ? `${errorMessage(caught)} (Draft ${purchaseNumber} tersimpan, jangan buat duplikat.)` : errorMessage(caught));
     } finally {
       setSubmitting(false);
     }

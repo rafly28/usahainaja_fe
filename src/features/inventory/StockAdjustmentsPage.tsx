@@ -13,8 +13,9 @@ export function StockAdjustmentsPage({
 }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
+  const [locations, setLocations] = useState<{ code: string; name: string; is_default?: boolean }[]>([]);
 
-  const [locationCode] = useState("LOC-DEFAULT");
+  const [locationCode, setLocationCode] = useState("");
   const [reason, setReason] = useState("CORRECTION");
   const [notes, setNotes] = useState("");
 
@@ -32,6 +33,19 @@ export function StockAdjustmentsPage({
       .then(setProducts)
       .catch((err) => setError(errorMessage(err)))
       .finally(() => setLoadingProducts(false));
+    api.locations
+      .list()
+      .then((items) => {
+        const mapped = (items ?? []).map((l) => ({
+          code: l.code ?? l.public_code ?? "",
+          name: l.name,
+          is_default: l.is_default,
+        })).filter((l) => l.code);
+        setLocations(mapped);
+        const def = mapped.find((l) => l.is_default) ?? mapped[0];
+        if (def) setLocationCode(def.code);
+      })
+      .catch((err) => setError(errorMessage(err)));
   }, []);
 
   const addItem = () => {
@@ -73,6 +87,11 @@ export function StockAdjustmentsPage({
     setSuccess(false);
 
     try {
+      if (!locationCode) {
+        setError("Pilih lokasi terlebih dahulu.");
+        setSubmitting(false);
+        return;
+      }
       const payloadItems = items.map((it) => {
         const prod = products.find((p) => getProductCode(p) === it.product_code);
         return {
@@ -129,6 +148,16 @@ export function StockAdjustmentsPage({
         <form className="content-card form-stack" onSubmit={handleSubmit} style={{ padding: 24, gap: 24 }}>
           <div>
             <label className="field">
+              <span>Lokasi *</span>
+              <select required value={locationCode} onChange={(e) => setLocationCode(e.target.value)}>
+                <option value="">-- Pilih Lokasi --</option>
+                {locations.map((l) => (
+                  <option key={l.code} value={l.code}>{l.name}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="field" style={{ marginTop: 16 }}>
               <span>Alasan Penyesuaian *</span>
               <select required value={reason} onChange={(e) => setReason(e.target.value)}>
                 <option value="CORRECTION">Koreksi Stok</option>
