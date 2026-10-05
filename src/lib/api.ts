@@ -6,6 +6,7 @@ import type {
   InventoryItem,
   NewPurchase,
   NewSale,
+  ReceivePurchaseInput,
   OpeningStockInput,
   Product,
   Session,
@@ -38,6 +39,7 @@ type RequestOptions = Omit<RequestInit, "body"> & {
   body?: unknown;
   mutation?: boolean;
   retryCsrf?: boolean;
+  idempotencyKey?: string;
 };
 
 export class ApiError extends Error {
@@ -125,12 +127,21 @@ async function ensureCsrfToken(): Promise<string> {
 }
 
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { body, mutation = false, retryCsrf = true, headers: inputHeaders, ...init } = options;
+  const { body, mutation = false, retryCsrf = true, idempotencyKey, headers: inputHeaders, ...init } = options;
   const headers = new Headers(inputHeaders);
   headers.set("Accept", "application/json");
 
   if (body !== undefined) headers.set("Content-Type", "application/json");
-  if (mutation) headers.set("X-CSRF-Token", await ensureCsrfToken());
+  let key = idempotencyKey;
+  if (mutation) {
+    headers.set("X-CSRF-Token", await ensureCsrfToken());
+    // Transaction contract: every mutation carries an Idempotency-Key.
+    // Reused across the CSRF retry so the retry is a true replay.
+    if (!key) {
+      key = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+    }
+    headers.set("Idempotency-Key", key);
+  }
 
   const response = await fetch(path, {
     ...init,
@@ -161,7 +172,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     const csrfRejected = response.status === 403 && error.code.toUpperCase().includes("CSRF");
     if (mutation && retryCsrf && csrfRejected) {
       csrfToken = null;
-      return request<T>(path, { ...options, retryCsrf: false });
+      return request<T>(path, { ...options, idempotencyKey: key, retryCsrf: false });
     }
     throw error;
   }
@@ -375,6 +386,8 @@ export const api = {
         body: input,
         mutation: true,
       }),
+    get: (receiptNumber: string) =>
+      request<{ receipt_number: string; status: string; grand_total: string; paid_total?: string }>(`/api/sales/${receiptNumber}`),
     checkout: (receiptNumber: string, input: PaymentInput) =>
       request<{ receipt_number: string }>(`/api/sales/${receiptNumber}/checkout`, {
         method: "POST",
@@ -387,24 +400,44 @@ export const api = {
         body: { reason },
         mutation: true,
       }),
+    cancel: (receiptNumber: string) =>
+      request<void>(`/api/sales/${receiptNumber}/cancel`, {
+        method: "POST",
+        body: {},
+        mutation: true,
+      }),
   },
   purchases: {
     create: (input: NewPurchase) =>
-      request<{ purchase_number: string }>("/api/purchases", {
+      request<{ purchase_number: string; items?: { line_number: number; product_code: string; quantity: string }[] }>("/api/purchases", {
         method: "POST",
         body: input,
         mutation: true,
       }),
-    receive: (purchaseNumber: string) =>
-      request<void>(`/api/purchases/${purchaseNumber}/receive`, {
+    get: (purchaseNumber: string) =>
+      request<{ purchase_number: string; status: string; grand_total: string; paid_total?: string; outstanding_total?: string }>(`/api/purchases/${purchaseNumber}`),
+    order: (purchaseNumber: string) =>
+      request<void>(`/api/purchases/${purchaseNumber}/order`, {
         method: "POST",
         body: {},
+        mutation: true,
+      }),
+    receive: (purchaseNumber: string, input?: ReceivePurchaseInput) =>
+      request<{ receipt_number: string }>(`/api/purchases/${purchaseNumber}/receive`, {
+        method: "POST",
+        body: input ?? {},
         mutation: true,
       }),
     pay: (purchaseNumber: string, input: PaymentInput) =>
       request<void>(`/api/purchases/${purchaseNumber}/payments`, {
         method: "POST",
         body: input,
+        mutation: true,
+      }),
+    cancel: (purchaseNumber: string) =>
+      request<void>(`/api/purchases/${purchaseNumber}/cancel`, {
+        method: "POST",
+        body: {},
         mutation: true,
       }),
     void: (purchaseNumber: string, reason: string) =>

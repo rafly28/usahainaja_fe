@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Alert } from "../../components/Feedback";
 import { Icon } from "../../components/Icons";
-import { api, errorMessage } from "../../lib/api";
+import { api, errorMessage, ApiError } from "../../lib/api";
 import { formatCurrency } from "../../lib/format";
 import { getProductCode, type Product, type PurchaseItem, type Location, type Contact, type CashAccount } from "../../types";
 
@@ -129,12 +129,12 @@ export function RestockPage({
     setSubmitting(true);
     setError("");
     let purchaseNumber: string | null = pendingPurchase;
+    let lines: { line_number: number; received_quantity: string | number }[] = [];
     try {
       if (!purchaseNumber) {
         const response = await api.purchases.create({
           location_code: locationCode,
           supplier_code: supplierCode || undefined,
-          payment_status: "UNPAID",
           reference_number: referenceNumber,
           discount_total: Math.max(0, discountTotal),
           tax_total: Math.max(0, taxTotal),
@@ -152,9 +152,41 @@ export function RestockPage({
           return;
         }
         setPendingPurchase(purchaseNumber);
+        lines = (response.items ?? []).map((it, idx) => ({
+          line_number: it.line_number ?? idx + 1,
+          received_quantity: it.quantity,
+        }));
+        // Fallback when the create response carries no lines.
+        if (lines.length === 0) {
+          const detail = await api.purchases.get(purchaseNumber).catch(() => null) as unknown as {
+            items?: { line_number: number; quantity: string }[];
+          } | null;
+          lines = (detail?.items ?? []).map((it, idx) => ({
+            line_number: it.line_number ?? idx + 1,
+            received_quantity: it.quantity,
+          }));
+        }
       }
       if (action === "receive" || action === "pay") {
-        await api.purchases.receive(purchaseNumber);
+        if (lines.length === 0) {
+          const detail = await api.purchases.get(purchaseNumber).catch(() => null) as unknown as {
+            items?: { line_number: number; quantity: string }[];
+          } | null;
+          lines = (detail?.items ?? []).map((it, idx) => ({
+            line_number: it.line_number ?? idx + 1,
+            received_quantity: it.quantity,
+          }));
+        }
+        await api.purchases.order(purchaseNumber).catch((err: unknown) => {
+          // Already ordered/received (e.g. retry after a partial failure):
+          // continue to receive instead of aborting.
+          if (err instanceof ApiError && err.code === "INVALID_STATE") return;
+          throw err;
+        });
+        await api.purchases.receive(purchaseNumber, {
+          reference_number: referenceNumber || undefined,
+          items: lines,
+        });
       }
       if (action === "pay") {
         await api.purchases.pay(purchaseNumber, {

@@ -149,7 +149,7 @@ export type SaleItem = {
 export type NewSale = {
   location_code: string;
   customer_code?: string;
-  payment_status: "UNPAID" | "PARTIAL" | "PAID";
+  payment_status?: "UNPAID" | "PARTIAL" | "PAID";
   discount_total: string | number;
   tax_total: string | number;
   notes?: string;
@@ -168,11 +168,21 @@ export type NewPurchase = {
   location_code: string;
   supplier_code?: string;
   reference_number?: string;
-  payment_status: "UNPAID" | "PARTIAL" | "PAID";
+  payment_status?: "UNPAID" | "PARTIAL" | "PAID";
   discount_total: string | number;
   tax_total: string | number;
   notes?: string;
   items: PurchaseItem[];
+};
+
+export type ReceiveLineInput = {
+  line_number: number;
+  received_quantity: string | number;
+};
+
+export type ReceivePurchaseInput = {
+  reference_number?: string;
+  items: ReceiveLineInput[];
 };
 
 export function getBusinessCode(business: Business | null | undefined): string {
@@ -214,6 +224,8 @@ export type CashAccount = {
 export type PaymentInput = {
   amount: string | number;
   cash_account_code: string;
+  payment_method_code?: string;
+  paid_at?: string;
   reference_number?: string;
   notes?: string;
 };
