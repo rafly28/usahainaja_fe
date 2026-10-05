@@ -45,11 +45,12 @@ npm run build
 - Pencatatan stok awal memakai kode publik produk.
 - Loading, error, validasi, dan empty state yang responsif.
 
-Halaman dan endpoint berikut bersifat **eksperimental/non-rilis** dan tidak
-dipakai pengguna rilis M1: Cashier, Restock, `/api/contacts`,
+Halaman dan endpoint berikut kini aktif di `main` mengikuti kontrak
+transaksi (T04/T05/T06): Kasir (draft → checkout → void), Restock
+(draft → order → receive → pay), `/api/contacts`,
 `/api/cash-accounts`, `/api/sales`, `/api/purchases`.
-Isolasi yang dipakai: **branch rilis khusus M1**
-(`release/m1-foundation-inventory`, baseline tag `t00-m1-baseline`).
+Baseline M1 tetap terarsip di branch `release/m1-foundation-inventory`
+(tag `t00-m1-baseline`).
 
 Token CSRF disimpan hanya di memory. Seluruh mutation memakai `credentials:
 "include"` dan header `X-CSRF-Token`.
