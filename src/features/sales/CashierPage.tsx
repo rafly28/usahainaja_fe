@@ -132,7 +132,6 @@ export function CashierPage({
         const response = await api.sales.create({
           location_code: locationCode,
           customer_code: customerCode || undefined,
-          payment_status: "PAID",
           discount_total: Math.max(0, discountTotal),
           tax_total: Math.max(0, taxTotal),
           items: cart.map((c) => ({
