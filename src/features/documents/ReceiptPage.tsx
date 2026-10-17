@@ -32,7 +32,10 @@ type Receipt = {
 
 /**
  * Dokumen transaksi memakai nomor publik, bukan UUID internal, sehingga dapat
- * dibuka langsung dari struk atau riwayat.
+ * dibuka langsung dari struk atau riwayat dan disimpan sebagai PDF.
+ *
+ * Format cetak memakai dialog cetak browser ("Save as PDF") pada ukuran A4.
+ * Tidak ada pustaka PDF tambahan supaya dependensi frontend tetap kecil.
  */
 export function ReceiptPage({
   documentNumber,
@@ -71,6 +74,7 @@ export function ReceiptPage({
   }, [documentNumber, documentType]);
 
   const documentLabel = documentType === "sale" ? "Struk Penjualan" : "Konfirmasi Pembelian";
+  const publicNumber = receipt ? receipt.receipt_number ?? receipt.purchase_number : documentNumber;
 
   return (
     <div className="page-stack max-w-3xl">
@@ -82,6 +86,17 @@ export function ReceiptPage({
           <h1>{documentLabel}</h1>
           <p className="muted">Nomor {documentNumber}</p>
         </div>
+        <div className="document-actions">
+          <button
+            type="button"
+            className="button button--primary"
+            disabled={!receipt}
+            onClick={() => window.print()}
+            title="Simpan dokumen sebagai PDF lewat dialog cetak browser"
+          >
+            Simpan PDF
+          </button>
+        </div>
       </div>
 
       {error && <Alert>{error}</Alert>}
@@ -91,27 +106,42 @@ export function ReceiptPage({
           <Spinner />
         </div>
       ) : receipt ? (
-        <div className="content-card form-stack" style={{ padding: 24, gap: 16 }}>
-          <div className="form-grid">
+        <div className="content-card document-sheet">
+          <header className="document-head">
             <div>
-              <span className="muted text-sm">Nomor dokumen</span>
-              <p className="font-medium">{receipt.receipt_number ?? receipt.purchase_number}</p>
+              <h2>{documentLabel}</h2>
+              <p className="muted" style={{ margin: "4px 0 0" }}>
+                Dicetak dari UsahainAja
+              </p>
             </div>
             <div>
-              <span className="muted text-sm">Waktu</span>
+              <span className="document-head__label">Nomor dokumen</span>
+              <p className="document-head__value">{publicNumber}</p>
+            </div>
+          </header>
+
+          <div className="document-meta">
+            <div className="document-meta__item">
+              <span>Waktu</span>
               <p>{formatDateTime(receipt.sale_date ?? receipt.purchase_date ?? "")}</p>
             </div>
-            <div>
-              <span className="muted text-sm">Status</span>
+            <div className="document-meta__item">
+              <span>Status</span>
               <p>{receipt.status}</p>
             </div>
-            <div>
-              <span className="muted text-sm">Status pembayaran</span>
+            <div className="document-meta__item">
+              <span>Status pembayaran</span>
               <p>{receipt.payment_status ?? "-"}</p>
             </div>
+            {receipt.location_code && (
+              <div className="document-meta__item">
+                <span>Lokasi</span>
+                <p>{receipt.location_code}</p>
+              </div>
+            )}
             {receipt.reference_number && (
-              <div>
-                <span className="muted text-sm">Referensi supplier</span>
+              <div className="document-meta__item">
+                <span>Referensi supplier</span>
                 <p>{receipt.reference_number}</p>
               </div>
             )}
@@ -143,19 +173,20 @@ export function ReceiptPage({
             </table>
           </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end" }}>
-            <div>
-              <span className="muted text-sm">Total</span>{" "}
+          <div className="document-totals">
+            <div className="document-totals__row document-totals__row--grand">
+              <span>Total</span>
               <strong>{formatNumber(receipt.grand_total)}</strong>
             </div>
             {receipt.paid_total && (
-              <div>
-                <span className="muted text-sm">Sudah dibayar</span> <strong>{formatNumber(receipt.paid_total)}</strong>
+              <div className="document-totals__row">
+                <span>Sudah dibayar</span>
+                <strong>{formatNumber(receipt.paid_total)}</strong>
               </div>
             )}
             {receipt.outstanding_total && (
-              <div>
-                <span className="muted text-sm">Sisa tagihan</span>{" "}
+              <div className="document-totals__row">
+                <span>Sisa tagihan</span>
                 <strong className="color-danger">{formatNumber(receipt.outstanding_total)}</strong>
               </div>
             )}
@@ -173,6 +204,11 @@ export function ReceiptPage({
               </ul>
             </div>
           )}
+
+          <p className="document-footnote">
+            Dokumen ini bukan invoice pajak. Nomor dokumen dapat dipakai untuk melacak transaksi pada
+            riwayat pergerakan stok dan pembayaran.
+          </p>
         </div>
       ) : null}
     </div>
