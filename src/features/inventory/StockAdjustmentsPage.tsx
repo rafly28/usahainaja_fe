@@ -1,8 +1,20 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Alert, Spinner } from "../../components/Feedback";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { Alert, EmptyState, Spinner } from "../../components/Feedback";
 import { Icon } from "../../components/Icons";
+import { formatDateTime } from "../../lib/format";
 import { api, errorMessage } from "../../lib/api";
-import { getProductCode, getProductUnit, type Product } from "../../types";
+import { getProductCode, getProductUnit, type Product, type StockAdjustment } from "../../types";
+import { StockAdjustmentDetail } from "./StockAdjustmentDetail";
+
+const ADJUSTMENT_REASONS = [
+  { value: "CORRECTION", label: "Koreksi stok" },
+  { value: "DAMAGE", label: "Barang rusak" },
+  { value: "SPOILAGE", label: "Basi / kedaluwarsa" },
+  { value: "LOST", label: "Barang hilang" },
+  { value: "OTHER", label: "Lainnya" },
+];
+
+type DraftLine = { product_code: string; quantity: string; direction: string };
 
 export function StockAdjustmentsPage({
   onGoBack,
@@ -18,108 +30,136 @@ export function StockAdjustmentsPage({
   const [locationCode, setLocationCode] = useState("");
   const [reason, setReason] = useState("CORRECTION");
   const [notes, setNotes] = useState("");
+  const [lines, setLines] = useState<DraftLine[]>([{ product_code: "", quantity: "", direction: "OUT" }]);
 
-  const [items, setItems] = useState<
-    { product_code: string; quantity: string; direction: string }[]
-  >([{ product_code: "", quantity: "", direction: "OUT" }]);
-
+  const [drafts, setDrafts] = useState<StockAdjustment[]>([]);
+  const [loadingDrafts, setLoadingDrafts] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [completing, setCompleting] = useState("");
+  const [selected, setSelected] = useState<string>("");
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState(false);
+  const [success, setSuccess] = useState("");
 
   useEffect(() => {
     api.products
       .list()
       .then(setProducts)
-      .catch((err) => setError(errorMessage(err)))
+      .catch((caught) => setError(errorMessage(caught)))
       .finally(() => setLoadingProducts(false));
     api.locations
       .list()
       .then((items) => {
-        const mapped = (items ?? []).map((l) => ({
-          code: l.code ?? l.public_code ?? "",
-          name: l.name,
-          is_default: l.is_default,
-        })).filter((l) => l.code);
+        const mapped = (items ?? [])
+          .map((location) => ({
+            code: location.code ?? location.public_code ?? "",
+            name: location.name,
+            is_default: location.is_default,
+          }))
+          .filter((location) => location.code);
         setLocations(mapped);
-        const def = mapped.find((l) => l.is_default) ?? mapped[0];
-        if (def) setLocationCode(def.code);
+        const fallback = mapped.find((location) => location.is_default) ?? mapped[0];
+        if (fallback) setLocationCode(fallback.code);
       })
-      .catch((err) => setError(errorMessage(err)));
+      .catch((caught) => setError(errorMessage(caught)));
   }, []);
 
-  const addItem = () => {
-    setItems([...items, { product_code: "", quantity: "", direction: "OUT" }]);
-  };
-
-  const removeItem = (index: number) => {
-    setItems(items.filter((_, i) => i !== index));
-  };
-
-  const updateItem = (index: number, field: "product_code" | "direction" | "quantity", value: string) => {
-    const newItems = [...items];
-    const current = newItems[index];
-    if (current) {
-      newItems[index] = { ...current, [field]: value };
-      setItems(newItems);
+  const loadDrafts = useCallback(async () => {
+    setLoadingDrafts(true);
+    try {
+      const result = await api.inventory.adjustments({ status: "DRAFT", limit: 25 });
+      setDrafts(result.items);
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setLoadingDrafts(false);
     }
-  };
+  }, []);
 
-  const activeProducts = useMemo(() => products.filter((p) => p.is_stock_tracked), [products]);
+  useEffect(() => {
+    void loadDrafts();
+  }, [loadDrafts]);
 
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (items.length === 0) {
+  const trackedProducts = useMemo(() => products.filter((product) => product.is_stock_tracked), [products]);
+
+  function updateLine(index: number, field: keyof DraftLine, value: string) {
+    setLines((current) => current.map((line, position) => (position === index ? { ...line, [field]: value } : line)));
+  }
+
+  function addLine() {
+    setLines((current) => [...current, { product_code: "", quantity: "", direction: "OUT" }]);
+  }
+
+  function removeLine(index: number) {
+    setLines((current) => current.filter((_, position) => position !== index));
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    if (lines.length === 0) {
       setError("Pilih minimal 1 produk.");
       return;
     }
-    
-    // validate
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      if (!item) continue;
-      if (!item.product_code) return setError(`Baris ${i + 1}: Produk harus dipilih.`);
-      if (Number(item.quantity) <= 0) return setError(`Baris ${i + 1}: Kuantitas harus lebih dari 0.`);
+    for (const [index, line] of lines.entries()) {
+      if (!line.product_code) {
+        setError(`Baris ${index + 1}: Produk harus dipilih.`);
+        return;
+      }
+      if (!(Number(line.quantity) > 0)) {
+        setError(`Baris ${index + 1}: Kuantitas harus lebih dari 0.`);
+        return;
+      }
+    }
+    if (!locationCode) {
+      setError("Pilih lokasi terlebih dahulu.");
+      return;
     }
 
     setSubmitting(true);
     setError("");
-    setSuccess(false);
-
+    setSuccess("");
     try {
-      if (!locationCode) {
-        setError("Pilih lokasi terlebih dahulu.");
-        setSubmitting(false);
-        return;
-      }
-      const payloadItems = items.map((it) => {
-        const prod = products.find((p) => getProductCode(p) === it.product_code);
+      const items = lines.map((line) => {
+        const product = trackedProducts.find((candidate) => getProductCode(candidate) === line.product_code);
         return {
-          product_code: it.product_code || "",
-          quantity: it.quantity || "",
-          direction: it.direction || "OUT",
-          unit_symbol: prod ? getProductUnit(prod) : "",
+          product_code: line.product_code,
+          quantity: line.quantity,
+          direction: line.direction,
+          unit_symbol: product ? getProductUnit(product) : "",
         };
       });
-
       const adjustment = await api.inventory.createAdjustment({
         location_code: locationCode,
         reason,
-        notes,
-        items: payloadItems,
+        notes: notes.trim() || undefined,
+        items,
       });
-
-      await api.inventory.completeAdjustment(adjustment.adjustment_number);
-      
-      setSuccess(true);
-      setItems([{ product_code: "", quantity: "", direction: "OUT" }]);
+      setSuccess(`Draft ${adjustment.adjustment_number} dibuat. Selesaikan untuk menerapkan ke stok.`);
+      setLines([{ product_code: "", quantity: "", direction: "OUT" }]);
       setNotes("");
-    } catch (err) {
-      setError(errorMessage(err));
+      await loadDrafts();
+      onSuccess(`Draft penyesuaian ${adjustment.adjustment_number} dibuat.`);
+    } catch (caught) {
+      setError(errorMessage(caught));
     } finally {
       setSubmitting(false);
     }
-  };
+  }
+
+  async function complete(adjustmentNumber: string) {
+    setCompleting(adjustmentNumber);
+    setError("");
+    setSuccess("");
+    try {
+      await api.inventory.completeAdjustment(adjustmentNumber);
+      setSuccess(`Penyesuaian ${adjustmentNumber} selesai dan stok sudah diperbarui.`);
+      setSelected("");
+      await loadDrafts();
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setCompleting("");
+    }
+  }
 
   return (
     <div className="page-stack max-w-3xl">
@@ -129,51 +169,49 @@ export function StockAdjustmentsPage({
         </button>
         <div>
           <h1>Penyesuaian Stok</h1>
-          <p className="muted">Koreksi stok barang akibat hilang, rusak, atau salah catat.</p>
+          <p className="muted">Buat draft lebih dulu, lalu selesaikan saat stok fisik sudah dicek.</p>
         </div>
       </div>
 
       {error && <Alert>{error}</Alert>}
-      {success && (
-        <Alert tone="success">
-          Penyesuaian stok berhasil disimpan. <button className="link-button" type="button" onClick={() => onSuccess("Penyesuaian stok berhasil disimpan.")}>Lihat Riwayat</button>
-        </Alert>
-      )}
+      {success && <Alert tone="success">{success}</Alert>}
 
       {loadingProducts ? (
         <div className="flex-center" style={{ minHeight: 200 }}>
           <Spinner />
         </div>
       ) : (
-        <form className="content-card form-stack" onSubmit={handleSubmit} style={{ padding: 24, gap: 24 }}>
+        <form className="content-card form-stack" onSubmit={submit} style={{ padding: 24, gap: 24 }}>
           <div>
             <label className="field">
               <span>Lokasi *</span>
-              <select required value={locationCode} onChange={(e) => setLocationCode(e.target.value)}>
+              <select required value={locationCode} onChange={(event) => setLocationCode(event.target.value)}>
                 <option value="">-- Pilih Lokasi --</option>
-                {locations.map((l) => (
-                  <option key={l.code} value={l.code}>{l.name}</option>
+                {locations.map((location) => (
+                  <option key={location.code} value={location.code}>
+                    {location.name}
+                  </option>
                 ))}
               </select>
             </label>
 
             <label className="field" style={{ marginTop: 16 }}>
               <span>Alasan Penyesuaian *</span>
-              <select required value={reason} onChange={(e) => setReason(e.target.value)}>
-                <option value="CORRECTION">Koreksi Stok</option>
-                <option value="DAMAGE">Barang Rusak</option>
-                <option value="SPOILAGE">Barang Basi / Kedaluwarsa</option>
-                <option value="LOST">Barang Hilang</option>
-                <option value="OTHER">Lainnya</option>
+              <select required value={reason} onChange={(event) => setReason(event.target.value)}>
+                {ADJUSTMENT_REASONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
               </select>
             </label>
-            
+
             <label className="field" style={{ marginTop: 16 }}>
               <span>Keterangan Tambahan</span>
-              <textarea 
-                value={notes} 
-                onChange={(e) => setNotes(e.target.value)} 
-                placeholder="Misal: Ditemukan saat audit bulanan"
+              <textarea
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+                placeholder="Misal: ditemukan berbeda saat audit bulanan"
                 rows={2}
               />
             </label>
@@ -181,34 +219,30 @@ export function StockAdjustmentsPage({
             <div className="divider" style={{ margin: "24px 0" }} />
 
             <h3 style={{ marginBottom: 16 }}>Daftar Barang</h3>
-            
-            {items.map((item, index) => {
-              const selectedProduct = activeProducts.find((p) => getProductCode(p) === item.product_code);
+
+            {lines.map((line, index) => {
+              const selectedProduct = trackedProducts.find((product) => getProductCode(product) === line.product_code);
               return (
                 <div key={index} style={{ display: "flex", gap: 12, marginBottom: 16, alignItems: "flex-end" }}>
                   <label className="field" style={{ flex: 2, marginBottom: 0 }}>
                     <span className="sr-only">Produk</span>
                     <select
                       required
-                      value={item.product_code}
-                      onChange={(e) => updateItem(index, "product_code", e.target.value)}
+                      value={line.product_code}
+                      onChange={(event) => updateLine(index, "product_code", event.target.value)}
                     >
                       <option value="">-- Pilih Produk --</option>
-                      {activeProducts.map((p) => (
-                        <option key={getProductCode(p)} value={getProductCode(p)}>
-                          {p.name} {getProductCode(p) ? `(${getProductCode(p)})` : ""}
+                      {trackedProducts.map((product) => (
+                        <option key={getProductCode(product)} value={getProductCode(product)}>
+                          {product.name} {getProductCode(product) ? `(${getProductCode(product)})` : ""}
                         </option>
                       ))}
                     </select>
                   </label>
-                  
+
                   <label className="field" style={{ flex: 1, marginBottom: 0 }}>
                     <span className="sr-only">Arah</span>
-                    <select
-                      required
-                      value={item.direction}
-                      onChange={(e) => updateItem(index, "direction", e.target.value)}
-                    >
+                    <select required value={line.direction} onChange={(event) => updateLine(index, "direction", event.target.value)}>
                       <option value="OUT">Kurangi (-)</option>
                       <option value="IN">Tambah (+)</option>
                     </select>
@@ -220,21 +254,21 @@ export function StockAdjustmentsPage({
                       <input
                         type="number"
                         min="0.01"
-                        step="0.01"
+                        step="any"
                         required
                         placeholder="Qty"
-                        value={item.quantity}
-                        onChange={(e) => updateItem(index, "quantity", e.target.value)}
+                        value={line.quantity}
+                        onChange={(event) => updateLine(index, "quantity", event.target.value)}
                       />
                       <span>{selectedProduct ? getProductUnit(selectedProduct) : "Unit"}</span>
                     </div>
                   </label>
 
-                  {items.length > 1 && (
-                    <button 
-                      type="button" 
-                      className="button button--ghost" 
-                      onClick={() => removeItem(index)}
+                  {lines.length > 1 && (
+                    <button
+                      type="button"
+                      className="button button--ghost"
+                      onClick={() => removeLine(index)}
                       style={{ height: 38, padding: "0 12px", color: "var(--color-danger)" }}
                       aria-label="Hapus"
                     >
@@ -245,21 +279,91 @@ export function StockAdjustmentsPage({
               );
             })}
 
-            <button type="button" className="button button--secondary" onClick={addItem} style={{ alignSelf: "flex-start", marginTop: 8 }}>
+            <button
+              type="button"
+              className="button button--secondary"
+              onClick={addLine}
+              style={{ alignSelf: "flex-start", marginTop: 8 }}
+            >
               <Icon name="plus" size={16} /> Tambah Baris
             </button>
           </div>
-          
+
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 16 }}>
             <button type="button" className="button button--ghost" onClick={onGoBack}>
               Batal
             </button>
-            <button type="submit" className="button button--primary" disabled={submitting || activeProducts.length === 0}>
-              {submitting ? "Menyimpan..." : "Simpan Penyesuaian"}
+            <button type="submit" className="button button--primary" disabled={submitting || trackedProducts.length === 0}>
+              {submitting ? "Menyimpan draft..." : "Simpan Draft"}
             </button>
           </div>
         </form>
       )}
+
+      <section className="content-card">
+        <div className="content-card__header">
+          <div>
+            <h2>Draft menunggu diselesaikan</h2>
+            <p className="muted">Stok baru berubah setelah draft diselesaikan.</p>
+          </div>
+          <button type="button" className="button button--ghost" onClick={() => void loadDrafts()}>
+            Muat ulang
+          </button>
+        </div>
+
+        {loadingDrafts ? (
+          <div className="flex-center" style={{ minHeight: 120 }}>
+            <Spinner />
+          </div>
+        ) : drafts.length === 0 ? (
+          <EmptyState title="Tidak ada draft" description="Draft yang dibuat akan muncul di sini sampai diselesaikan." />
+        ) : (
+          <div className="table-scroll">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Nomor</th>
+                  <th>Dibuat</th>
+                  <th>Lokasi</th>
+                  <th>Alasan</th>
+                  <th className="text-right">Aksi</th>
+                </tr>
+              </thead>
+              <tbody>
+                {drafts.map((draft) => (
+                  <tr key={draft.adjustment_number}>
+                    <td className="font-medium">{draft.adjustment_number}</td>
+                    <td className="muted">{formatDateTime(draft.adjustment_date)}</td>
+                    <td>{draft.location_code}</td>
+                    <td>{draft.reason}</td>
+                    <td className="text-right">
+                      <div style={{ display: "inline-flex", gap: 8, justifyContent: "flex-end" }}>
+                        <button
+                          type="button"
+                          className="button button--secondary"
+                          onClick={() => setSelected(selected === draft.adjustment_number ? "" : draft.adjustment_number)}
+                        >
+                          {selected === draft.adjustment_number ? "Tutup" : "Rincian"}
+                        </button>
+                        <button
+                          type="button"
+                          className="button button--primary"
+                          disabled={completing === draft.adjustment_number}
+                          onClick={() => void complete(draft.adjustment_number)}
+                        >
+                          {completing === draft.adjustment_number ? "Menyelesaikan..." : "Selesaikan"}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      {selected && <StockAdjustmentDetail adjustmentNumber={selected} onGoBack={() => setSelected("")} />}
     </div>
   );
 }

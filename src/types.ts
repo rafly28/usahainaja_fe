@@ -40,17 +40,54 @@ export interface StockAdjustmentItem {
   quantity: string;
   unit_symbol: string;
   direction: string;
+  /** Hanya terisi untuk adjustment hasil opname. */
+  system_quantity?: string;
+  /** Hanya terisi untuk adjustment hasil opname. */
+  counted_quantity?: string;
 }
 
 export interface StockAdjustment {
   adjustment_number: string;
   location_code: string;
   reason: string;
+  /** MANUAL untuk adjustment biasa, OPNAME untuk hasil hitung fisik. */
+  adjustment_kind: string;
   status: string;
   notes?: string;
   adjustment_date: string;
+  created_by_name?: string;
   items: StockAdjustmentItem[];
 }
+
+export interface NewStockOpnameItem {
+  product_code: string;
+  /** Kuantitas hasil hitung fisik; boleh nol. */
+  counted_quantity: string;
+  unit_symbol?: string;
+}
+
+export interface NewStockOpname {
+  location_code: string;
+  reason?: string;
+  notes?: string;
+  items: NewStockOpnameItem[];
+}
+
+export type MovementFilters = {
+  product_public_code?: string;
+  location?: string;
+  movement_type?: string;
+  date_from?: string;
+  date_to?: string;
+  page?: number;
+  limit?: number;
+};
+
+export type Pagination = {
+  page: number;
+  limit: number;
+  total: number;
+};
 
 export type Business = {
   code?: string;
@@ -62,6 +99,8 @@ export type Business = {
   currency?: string;
   role?: string;
   enabled_modules?: string[];
+  /** Logo toko untuk dokumen cetak; kosong berarti belum memasang logo. */
+  logo_url?: string;
   default_location?: {
     code: string;
     name: string;
@@ -115,6 +154,8 @@ export type InventoryItem = {
   min_stock?: number | string | null;
   location_code?: string;
   location_name?: string;
+  /** Dihitung di server agar dashboard dan laporan memakai definisi sama. */
+  is_low_stock?: boolean;
 };
 
 export type FieldErrors = Record<string, string | string[]>;
@@ -131,11 +172,16 @@ export type CreateProductInput = {
   category_code?: string;
 };
 
-export type OpeningStockInput = {
+export type OpeningStockItemInput = {
   product_code: string;
-  quantity: number;
+  quantity: number | string;
+  unit_symbol?: string;
+};
+
+export type OpeningStockInput = {
   location_code?: string;
   reason?: string;
+  items: OpeningStockItemInput[];
 };
 
 export type SaleItem = {

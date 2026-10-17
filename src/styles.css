@@ -2590,3 +2590,257 @@ tbody tr:hover {
     gap: 10px;
   }
 }
+
+/* ==========================================================================
+   Dokumen cetak (T12)
+   Struk penjualan dan konfirmasi pembelian dapat disimpan sebagai PDF lewat
+   dialog cetak browser. Navigasi, sidebar, dan tombol aksi disembunyikan
+   supaya yang tercetak hanya dokumennya.
+   ========================================================================== */
+
+.document-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.document-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.document-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: space-between;
+  padding-bottom: 14px;
+  border-bottom: 2px solid var(--green-800);
+}
+
+.document-head h2 {
+  margin: 0;
+}
+
+.document-head__label {
+  display: block;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.document-head__value {
+  margin: 2px 0 0;
+  font-weight: 600;
+}
+
+.document-meta {
+  display: grid;
+  gap: 12px 20px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+
+.document-meta__item span {
+  display: block;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.document-meta__item p {
+  margin: 2px 0 0;
+  font-weight: 600;
+}
+
+.document-totals {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-end;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.document-totals__row {
+  display: flex;
+  gap: 18px;
+  align-items: baseline;
+  justify-content: space-between;
+  min-width: 260px;
+}
+
+.document-totals__row--grand {
+  font-size: 18px;
+}
+
+.document-totals__row span:first-child {
+  font-size: 13px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.document-footnote {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+
+  /*
+   * Prinsipnya: yang dicetak harus sama dengan yang terlihat di layar.
+   * Yang diubah hanya chrome aplikasi, ukuran kertas, dan hal yang memang
+   * tidak bisa dicetak (bayangan layar, gradasi translucent).
+   */
+
+  /* Chrome aplikasi disembunyikan; isi dokumen tetap seperti di layar. */
+  .sidebar,
+  .topbar,
+  .top-error,
+  .page-heading,
+  .document-actions,
+  .feedback,
+  .mobile-nav,
+  .no-print {
+    display: none !important;
+  }
+
+  .app-shell {
+    display: block;
+    min-height: 0;
+    background: #fff;
+  }
+
+  .workspace {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .workspace__content {
+    max-width: none;
+    padding: 0;
+  }
+
+  /* Kartu dokumen mempertahankan padding, border, dan radiusnya. */
+  .document-sheet {
+    padding: 24px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: #fff;
+  }
+
+  /* Bayangan layar tidak transferable ke kertas, jadi dihapus saja. */
+  .content-card,
+  .document-sheet,
+  table,
+  tr {
+    box-shadow: none;
+  }
+
+  /* Warna teks dan garis tetap sama seperti di layar. */
+  html,
+  body {
+    background: #fff;
+  }
+
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .table-scroll {
+    overflow: visible;
+  }
+
+  table {
+    width: 100%;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  tr,
+  img {
+    break-inside: avoid;
+  }
+}
+
+/* Konten yang tidak boleh ikut tercetak saat menyimpan PDF dokumen. */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* Kop dokumen: logo toko + nama toko di kiri, nomor dokumen di kanan. */
+.document-identity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+/*
+ * Logo toko memakai radius simetris dan overflow tersembunyi supaya ujung
+ * gambar tidak terpotong. Badge fallback memakai font yang eksplisit
+ * agar teks di dalam lingkaran tidak menyentuh tepi.
+ */
+.document-logo {
+  display: block;
+  flex: 0 0 auto;
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #fff;
+  object-fit: contain;
+  overflow: hidden;
+}
+
+.document-logo--fallback {
+  display: grid;
+  place-items: center;
+  color: var(--green-950);
+  background: var(--green-100);
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.document-store {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.document-store__type {
+  margin: 2px 0 0;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Pengaturan logo usaha di halaman Profil dan modul. */
+.logo-settings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.logo-settings__controls {
+  display: flex;
+  flex: 1 1 320px;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 260px;
+}

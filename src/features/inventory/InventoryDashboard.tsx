@@ -13,6 +13,8 @@ export function InventoryDashboard({
   onGoToOpeningStock,
   onGoToMovements,
   onGoToAdjustments,
+  onGoToOpname,
+  onGoToDocuments,
 }: {
   inventory: InventoryItem[];
   error: string;
@@ -21,6 +23,8 @@ export function InventoryDashboard({
   onGoToOpeningStock: () => void;
   onGoToMovements: () => void;
   onGoToAdjustments: () => void;
+  onGoToOpname: () => void;
+  onGoToDocuments: () => void;
 }) {
   const [search, setSearch] = useState("");
   const [onlyLowStock, setOnlyLowStock] = useState(false);
@@ -50,12 +54,16 @@ export function InventoryDashboard({
 
   const filtered = useMemo(() => {
     return serverInventory.filter((item) => {
-      const quantity = item.quantity ?? item.stock;
-      return !onlyLowStock || isLowStock(quantity, item.min_stock);
+      if (!onlyLowStock) return true;
+      if (typeof item.is_low_stock === "boolean") return item.is_low_stock;
+      return isLowStock(item.quantity ?? item.stock, item.min_stock);
     });
   }, [serverInventory, onlyLowStock]);
 
-  const lowStockCount = inventory.filter((item) => isLowStock(item.quantity ?? item.stock, item.min_stock)).length;
+  const lowStockCount = inventory.filter((item) => {
+    if (typeof item.is_low_stock === "boolean") return item.is_low_stock;
+    return isLowStock(item.quantity ?? item.stock, item.min_stock);
+  }).length;
   const locations = new Set(inventory.map((item) => item.location_code).filter(Boolean)).size;
 
   return (
@@ -72,6 +80,12 @@ export function InventoryDashboard({
           </button>
           <button className="button button--secondary" type="button" onClick={onGoToAdjustments}>
             Penyesuaian
+          </button>
+          <button className="button button--secondary" type="button" onClick={onGoToOpname}>
+            Stok opname
+          </button>
+          <button className="button button--secondary" type="button" onClick={onGoToDocuments}>
+            Dokumen
           </button>
           <button className="button button--primary" type="button" onClick={onGoToOpeningStock}>
             <Icon name="plus" size={18} /> Catat stok awal

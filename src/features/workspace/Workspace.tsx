@@ -22,8 +22,24 @@ import { getBusinessProfile, getEnabledModules, isModuleEnabled } from "../busin
 import { CashierPage } from "../sales/CashierPage";
 import { RestockPage } from "../purchases/RestockPage";
 import { MasterDataPage } from "../master-data/MasterDataPage";
+import { StockOpnamePage } from "../inventory/StockOpnamePage";
+import { ReceiptPage } from "../documents/ReceiptPage";
+import { DocumentsHub } from "../documents/DocumentsHub";
 
-type View = "dashboard" | "products" | "opening-stock" | "movements" | "adjustments" | "business-settings" | "master-data" | "cashier" | "restock";
+type View =
+  | "dashboard"
+  | "products"
+  | "opening-stock"
+  | "movements"
+  | "adjustments"
+  | "opname"
+  | "documents"
+  | "business-settings"
+  | "master-data"
+  | "cashier"
+  | "restock";
+
+type OpenDocument = { number: string; type: "sale" | "purchase" };
 type NavigationItem = { id: View; label: string; icon: "home" | "box" | "plus" | "edit" | "shopping-cart" | "truck" };
 
 export function Workspace({
@@ -50,6 +66,7 @@ export function Workspace({
   const [switchError, setSwitchError] = useState("");
   const [switchingBusiness, setSwitchingBusiness] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [openDocument, setOpenDocument] = useState<OpenDocument | null>(null);
 
   const activeCode = getBusinessCode(activeBusiness);
   const enrichedBusiness = useMemo(
@@ -69,6 +86,8 @@ export function Workspace({
     if (purchaseEnabled) items.push({ id: "restock", label: "Pembelian", icon: "truck" });
     if (catalogEnabled) items.push({ id: "products", label: "Produk", icon: "box" });
     if (inventoryEnabled) items.push({ id: "opening-stock", label: "Stok awal", icon: "plus" });
+    if (inventoryEnabled) items.push({ id: "opname", label: "Stok opname", icon: "box" });
+    if (inventoryEnabled || salesEnabled || purchaseEnabled) items.push({ id: "documents", label: "Dokumen", icon: "edit" });
     if (["OWNER", "ADMIN"].includes(enrichedBusiness.role ?? activeBusiness.role ?? "")) {
       items.push({ id: "master-data", label: "Data usaha", icon: "edit" });
       items.push({ id: "business-settings", label: "Pengaturan", icon: "edit" });
@@ -120,6 +139,9 @@ export function Workspace({
 
   useEffect(() => {
     if ((view === "products" && !catalogEnabled) || (view === "opening-stock" && !inventoryEnabled)) {
+      setView("dashboard");
+    }
+    if (view === "opname" && !inventoryEnabled) {
       setView("dashboard");
     }
   }, [catalogEnabled, inventoryEnabled, view]);
@@ -227,6 +249,8 @@ export function Workspace({
                 onGoToOpeningStock={() => navigate("opening-stock")}
                 onGoToMovements={() => navigate("movements")}
                 onGoToAdjustments={() => navigate("adjustments")}
+                onGoToOpname={() => navigate("opname")}
+                onGoToDocuments={() => navigate("documents")}
               />
             ) : <BusinessProfileDashboard profile={profile} modules={enabledModules} />
           )}
@@ -261,6 +285,25 @@ export function Workspace({
               }}
             />
           )}
+          {view === "opname" && <StockOpnamePage onGoBack={() => navigate("dashboard")} />}
+          {view === "documents" && !openDocument && (
+            <DocumentsHub
+              onOpenDocument={(document) => {
+                setOpenDocument(document);
+                navigate("documents");
+              }}
+              onGoBack={() => navigate("dashboard")}
+            />
+          )}
+          {openDocument && (
+            <ReceiptPage
+              documentNumber={openDocument.number}
+              documentType={openDocument.type}
+              businessName={enrichedBusiness.name}
+              businessLogoUrl={enrichedBusiness.logo_url}
+              onGoBack={() => setOpenDocument(null)}
+            />
+          )}
           {view === "business-settings" && (
             <BusinessSettings business={enrichedBusiness} onSaved={onBusinessUpdated} />
           )}
@@ -271,7 +314,7 @@ export function Workspace({
               onSaleCreated={async (receipt) => {
                 await loadData();
                 setSuccess(`Transaksi penjualan ${receipt} berhasil.`);
-                navigate("dashboard");
+                setOpenDocument({ number: receipt, type: "sale" });
               }} 
               onGoToProducts={() => navigate("products")} 
             />
