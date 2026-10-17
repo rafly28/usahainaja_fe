@@ -40,10 +40,9 @@ export function OpeningStockForm({
     setError("");
     try {
       await api.inventory.openingStock({
-        product_code: productCode,
-        quantity: parsedQuantity,
         location_code: locationCode.trim() || undefined,
         reason: reason.trim() || undefined,
+        items: [{ product_code: productCode, quantity: parsedQuantity }],
       });
       await onRecorded(selectedProduct?.name ?? "Produk");
       setQuantity("");

@@ -1,198 +1,52 @@
 import type {
   Business,
   BusinessMember,
+  CashAccount,
+  Category,
+  Contact,
   CreateProductInput,
-  FieldErrors,
-  InventoryItem,
+  Location,
   NewPurchase,
   NewSale,
-  ReceivePurchaseInput,
-  OpeningStockInput,
-  Product,
-  Session,
-  StockAdjustment,
-  StockMovement,
-  NewStockAdjustment,
-  User,
-  Category,
-  Location,
-  Contact,
-  CashAccount,
-  PaymentInput,
   Party,
   PartyContact,
+  PaymentInput,
+  Product,
+  ReceivePurchaseInput,
+  Session,
   Unit,
   UnitConversion,
+  User,
 } from "../types";
+import { inventoryApi } from "./api.inventory";
+import { extractCollection, queryPath, request, setCsrfToken } from "./http";
 
-type ApiEnvelope<T> = {
-  success?: boolean;
-  data?: T;
-  error?: {
-    code?: string;
-    message?: string;
-    fields?: FieldErrors;
-  };
+// Error dan helper transport tetap diekspor dari api.ts agar konsumen lama tidak berubah.
+export { ApiError, extractCollection, errorMessage, isUnauthorized } from "./http";
+
+type SaleSummary = {
+  receipt_number: string;
+  sale_date: string;
+  status: string;
+  payment_status?: string;
+  grand_total: string;
 };
 
-type RequestOptions = Omit<RequestInit, "body"> & {
-  body?: unknown;
-  mutation?: boolean;
-  retryCsrf?: boolean;
-  idempotencyKey?: string;
+type PurchaseSummary = {
+  purchase_number: string;
+  purchase_date: string;
+  status: string;
+  payment_status?: string;
+  grand_total: string;
 };
 
-export class ApiError extends Error {
-  readonly status: number;
-  readonly code: string;
-  readonly fields?: FieldErrors;
-
-  constructor(message: string, status: number, code = "REQUEST_FAILED", fields?: FieldErrors) {
-    super(message);
-    this.name = "ApiError";
-    this.status = status;
-    this.code = code;
-    this.fields = fields;
-  }
-}
-
-let csrfToken: string | null = null;
-let csrfInflight: Promise<string> | null = null;
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
-  return value as Record<string, unknown>;
-}
-
-export function extractCollection<T>(value: unknown, preferredKeys: string[] = []): T[] {
-  if (Array.isArray(value)) return value as T[];
-
-  const record = asRecord(value);
-  if (!record) return [];
-
-  for (const key of [...preferredKeys, "items", "results"]) {
-    if (Array.isArray(record[key])) return record[key] as T[];
-  }
-
-  const nested = record.data;
-  if (nested !== value) return extractCollection<T>(nested, preferredKeys);
-  return [];
-}
-
-async function readEnvelope<T>(response: Response): Promise<ApiEnvelope<T>> {
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.includes("application/json")) {
-    if (response.ok && response.status === 204) return {};
-    throw new ApiError("Server mengirim respons yang tidak dikenali.", response.status);
-  }
-
-  try {
-    return (await response.json()) as ApiEnvelope<T>;
-  } catch {
-    throw new ApiError("Respons server tidak dapat dibaca.", response.status);
-  }
-}
-
-async function ensureCsrfToken(): Promise<string> {
-  if (csrfToken) return csrfToken;
-  if (csrfInflight) return csrfInflight;
-
-  csrfInflight = (async () => {
-    const response = await fetch("/api/auth/csrf", {
-      method: "GET",
-      credentials: "include",
-      headers: { Accept: "application/json" },
-    });
-    const envelope = await readEnvelope<{ csrf_token?: string }>(response);
-    const token = envelope.data?.csrf_token;
-
-    if (!response.ok || !token) {
-      throw new ApiError(
-        envelope.error?.message ?? "Tidak dapat menyiapkan keamanan formulir.",
-        response.status,
-        envelope.error?.code ?? "CSRF_UNAVAILABLE",
-        envelope.error?.fields,
-      );
-    }
-
-    csrfToken = token;
-    return token;
-  })();
-
-  try {
-    return await csrfInflight;
-  } finally {
-    csrfInflight = null;
-  }
-}
-
-async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { body, mutation = false, retryCsrf = true, idempotencyKey, headers: inputHeaders, ...init } = options;
-  const headers = new Headers(inputHeaders);
-  headers.set("Accept", "application/json");
-
-  if (body !== undefined) headers.set("Content-Type", "application/json");
-  let key = idempotencyKey;
-  if (mutation) {
-    headers.set("X-CSRF-Token", await ensureCsrfToken());
-    // Transaction contract: every mutation carries an Idempotency-Key.
-    // Reused across the CSRF retry so the retry is a true replay.
-    if (!key) {
-      key = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
-    }
-    headers.set("Idempotency-Key", key);
-  }
-
-  const response = await fetch(path, {
-    ...init,
-    credentials: "include",
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
-  const envelope = await readEnvelope<T>(response);
-
-  if (!response.ok || envelope.success === false || envelope.error) {
-    let msg = envelope.error?.message;
-    if (!msg) {
-      if (response.status === 401) msg = "Sesi telah berakhir atau tidak valid.";
-      else if (response.status === 403) msg = "Akses ditolak.";
-      else if (response.status === 404) msg = "Data tidak ditemukan.";
-      else if (response.status === 409) msg = "Terdapat konflik data.";
-      else if (response.status === 422) msg = "Data yang diisi belum benar.";
-      else msg = "Permintaan belum berhasil. Silakan coba lagi.";
-    }
-
-    const error = new ApiError(
-      msg,
-      response.status,
-      envelope.error?.code,
-      envelope.error?.fields,
-    );
-
-    const csrfRejected = response.status === 403 && error.code.toUpperCase().includes("CSRF");
-    if (mutation && retryCsrf && csrfRejected) {
-      csrfToken = null;
-      return request<T>(path, { ...options, idempotencyKey: key, retryCsrf: false });
-    }
-    throw error;
-  }
-
-  const data = envelope.data as T;
-  const record = asRecord(data);
-  if (typeof record?.csrf_token === "string") csrfToken = record.csrf_token;
-  return data;
-}
-
-function queryPath(path: string, params: Record<string, string | boolean | undefined>): string {
-  const search = new URLSearchParams();
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== "") search.set(key, String(value));
-  });
-  const query = search.toString();
-  return query ? `${path}?${query}` : path;
-}
-
+/**
+ * Permukaan API dipisah per domain agar setiap file tetap mudah dibaca.
+ * Endpoint inventaris, adjustment, dan opname ada di api.inventory.ts.
+ */
 export const api = {
+  inventory: inventoryApi,
+
   auth: {
     me: () => request<Session>("/api/auth/me"),
     register: async (input: { name: string; email: string; password: string }) => {
@@ -204,7 +58,7 @@ export const api = {
         "/api/auth/register",
         { method: "POST", body: input },
       );
-      if (data?.csrf_token) csrfToken = data.csrf_token;
+      if (data?.csrf_token) setCsrfToken(data.csrf_token);
       return data;
     },
     login: async (input: { email: string; password: string }) => {
@@ -214,7 +68,7 @@ export const api = {
         business_required?: boolean;
         csrf_token?: string;
       }>("/api/auth/login", { method: "POST", body: input });
-      if (data?.csrf_token) csrfToken = data.csrf_token;
+      if (data?.csrf_token) setCsrfToken(data.csrf_token);
       return data;
     },
     logout: async () => {
@@ -222,7 +76,7 @@ export const api = {
         method: "POST",
         mutation: true,
       });
-      csrfToken = null;
+      setCsrfToken(null);
     },
     switchBusiness: (businessCode: string) =>
       request<{ active_business: Business }>("/api/auth/switch-business", {
@@ -329,38 +183,6 @@ export const api = {
         mutation: true,
       }),
   },
-  inventory: {
-    list: async (params: { search?: string; lowStock?: boolean } = {}) => {
-      const data = await request<unknown>(
-        queryPath("/api/inventory/products", {
-          search: params.search,
-          low_stock: params.lowStock ? true : undefined,
-        }),
-      );
-      return extractCollection<InventoryItem>(data, ["items"]);
-    },
-    openingStock: (input: OpeningStockInput) =>
-      request<unknown>("/api/inventory/opening-stock", {
-        method: "POST",
-        body: input,
-        mutation: true,
-      }),
-    movements: async () => {
-      const data = await request<unknown>("/api/inventory/movements");
-      return extractCollection<StockMovement>(data, ["movements", "data", "items"]);
-    },
-    createAdjustment: (input: NewStockAdjustment) =>
-      request<StockAdjustment>("/api/inventory/adjustments", {
-        method: "POST",
-        body: input,
-        mutation: true,
-      }),
-    completeAdjustment: (number: string) =>
-      request<unknown>(`/api/inventory/adjustments/${number}/complete`, {
-        method: "POST",
-        mutation: true,
-      }),
-  },
   locations: {
     list: async () => {
       const data = await request<unknown>("/api/locations");
@@ -380,6 +202,10 @@ export const api = {
     },
   },
   sales: {
+    list: async (params: { page?: number; limit?: number } = {}) => {
+      const data = await request<unknown>(queryPath("/api/sales", { page: params.page, limit: params.limit }));
+      return extractCollection<SaleSummary>(data, ["items"]);
+    },
     create: (input: NewSale) =>
       request<{ receipt_number: string }>("/api/sales", {
         method: "POST",
@@ -394,6 +220,8 @@ export const api = {
         body: input,
         mutation: true,
       }),
+    receipt: (receiptNumber: string) =>
+      request<unknown>(`/api/sales/${receiptNumber}/receipt`),
     void: (receiptNumber: string, reason: string) =>
       request<void>(`/api/sales/${receiptNumber}/void`, {
         method: "POST",
@@ -408,6 +236,10 @@ export const api = {
       }),
   },
   purchases: {
+    list: async (params: { page?: number; limit?: number } = {}) => {
+      const data = await request<unknown>(queryPath("/api/purchases", { page: params.page, limit: params.limit }));
+      return extractCollection<PurchaseSummary>(data, ["items"]);
+    },
     create: (input: NewPurchase) =>
       request<{ purchase_number: string; items?: { line_number: number; product_code: string; quantity: string }[] }>("/api/purchases", {
         method: "POST",
@@ -440,6 +272,8 @@ export const api = {
         body: {},
         mutation: true,
       }),
+    receipt: (purchaseNumber: string) =>
+      request<unknown>(`/api/purchases/${purchaseNumber}/receipt`),
     void: (purchaseNumber: string, reason: string) =>
       request<void>(`/api/purchases/${purchaseNumber}/void`, {
         method: "POST",
@@ -448,13 +282,3 @@ export const api = {
       }),
   },
 };
-
-export function isUnauthorized(error: unknown): boolean {
-  return error instanceof ApiError && error.status === 401;
-}
-
-export function errorMessage(error: unknown): string {
-  if (error instanceof ApiError) return error.message;
-  if (error instanceof Error) return error.message;
-  return "Terjadi kendala yang tidak terduga.";
-}
