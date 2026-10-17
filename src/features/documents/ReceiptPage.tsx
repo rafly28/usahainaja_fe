@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Brand } from "../../components/Brand";
+import { StoreIdentity } from "./StoreIdentity";
 import { Alert, Spinner } from "../../components/Feedback";
 import { formatDateTime, formatNumber } from "../../lib/format";
 import { api, errorMessage } from "../../lib/api";
@@ -42,11 +42,13 @@ export function ReceiptPage({
   documentNumber,
   documentType,
   businessName,
+  businessLogoUrl,
   onGoBack,
 }: {
   documentNumber: string;
   documentType: "sale" | "purchase";
   businessName: string;
+  businessLogoUrl?: string;
   onGoBack: () => void;
 }) {
   const [receipt, setReceipt] = useState<Receipt | null>(null);
@@ -111,13 +113,7 @@ export function ReceiptPage({
       ) : receipt ? (
         <div className="content-card document-sheet">
           <header className="document-head">
-            <div className="document-identity">
-              <Brand />
-              <div>
-                <h2 className="document-store">{businessName}</h2>
-                <p className="document-store__type">{documentLabel}</p>
-              </div>
-            </div>
+            <StoreIdentity name={businessName} logoUrl={businessLogoUrl} documentLabel={documentLabel} />
             <div>
               <span className="document-head__label">Nomor dokumen</span>
               <p className="document-head__value">{publicNumber}</p>

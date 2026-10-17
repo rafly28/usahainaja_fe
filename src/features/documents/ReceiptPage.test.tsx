@@ -54,8 +54,8 @@ describe("ReceiptPage", () => {
     );
 
     expect(await screen.findByText("Toko Kopi Nusantara")).toBeTruthy();
-    // Logo memakai aria-label pada elemen Brand.
-    expect(screen.getByLabelText("UsahainAja")).toBeTruthy();
+    // Tanpa logo, kop memakai badge inisial nama toko.
+    expect(screen.getByText("TKN")).toBeTruthy();
     // Label jenis dokumen muncul di judul halaman dan di kop dokumen.
     expect(screen.getAllByText("Struk Penjualan")).toHaveLength(2);
   });
@@ -72,6 +72,39 @@ describe("ReceiptPage", () => {
 
     await screen.findByText("Toko Kopi Nusantara");
     expect(container.textContent ?? "").not.toContain("Dicetak dari");
+  });
+
+  it("menampilkan logo toko bila tersedia dan tidak memakai logo aplikasi", async () => {
+    const { container } = render(
+      <ReceiptPage
+        documentNumber="SL-000001"
+        documentType="sale"
+        businessName="Toko Kopi Nusantara"
+        businessLogoUrl="data:image/png;base64,iVBORw0KGgo="
+        onGoBack={() => {}}
+      />,
+    );
+
+    await screen.findByText("Toko Kopi Nusantara");
+    const logo = container.querySelector<HTMLImageElement>("img.document-logo");
+    expect(logo?.getAttribute("src")).toContain("data:image/png");
+    expect(container.querySelector(".document-logo--fallback")).toBeNull();
+    // Logo aplikasi tidak boleh muncul pada dokumen.
+    expect(container.querySelector(".brand")).toBeNull();
+  });
+
+  it("memakai badge inisial sebagai fallback ketika logo tidak dimuat", async () => {
+    const { container } = render(
+      <ReceiptPage
+        documentNumber="SL-000001"
+        documentType="sale"
+        businessName="Toko Kopi Nusantara"
+        onGoBack={() => {}}
+      />,
+    );
+
+    await screen.findByText("Toko Kopi Nusantara");
+    expect(container.querySelector(".document-logo--fallback")?.textContent).toBe("TKN");
   });
 
   it("menandai area tombol dan navigasi sebagai no-print", async () => {

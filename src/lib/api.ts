@@ -101,7 +101,12 @@ export const api = {
         body: input,
         mutation: true,
       }),
-    updateConfiguration: (input: { business_type: string; enabled_modules: string[] }) =>
+    /** logo_url tidak dikirim bila tidak berubah; string kosong menghapus logo. */
+    updateConfiguration: (input: {
+      business_type: string;
+      enabled_modules: string[];
+      logo_url?: string;
+    }) =>
       request<Business>("/api/businesses/current/configuration", {
         method: "PUT",
         body: input,

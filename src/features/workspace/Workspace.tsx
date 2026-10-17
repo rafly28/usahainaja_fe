@@ -300,6 +300,7 @@ export function Workspace({
               documentNumber={openDocument.number}
               documentType={openDocument.type}
               businessName={enrichedBusiness.name}
+              businessLogoUrl={enrichedBusiness.logo_url}
               onGoBack={() => setOpenDocument(null)}
             />
           )}

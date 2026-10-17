@@ -99,6 +99,8 @@ export type Business = {
   currency?: string;
   role?: string;
   enabled_modules?: string[];
+  /** Logo toko untuk dokumen cetak; kosong berarti belum memasang logo. */
+  logo_url?: string;
   default_location?: {
     code: string;
     name: string;

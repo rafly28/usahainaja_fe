@@ -2695,16 +2695,13 @@ tbody tr:hover {
     margin: 14mm;
   }
 
-  html,
-  body {
-    background: #fff;
-  }
+  /*
+   * Prinsipnya: yang dicetak harus sama dengan yang terlihat di layar.
+   * Yang diubah hanya chrome aplikasi, ukuran kertas, dan hal yang memang
+   * tidak bisa dicetak (bayangan layar, gradasi translucent).
+   */
 
-  body {
-    font-size: 12px;
-  }
-
-  /* Semua chrome aplikasi disembunyikan; hanya dokumen yang dicetak. */
+  /* Chrome aplikasi disembunyikan; isi dokumen tetap seperti di layar. */
   .sidebar,
   .topbar,
   .top-error,
@@ -2719,6 +2716,7 @@ tbody tr:hover {
   .app-shell {
     display: block;
     min-height: 0;
+    background: #fff;
   }
 
   .workspace {
@@ -2731,12 +2729,31 @@ tbody tr:hover {
     padding: 0;
   }
 
-  .content-card,
+  /* Kartu dokumen mempertahankan padding, border, dan radiusnya. */
   .document-sheet {
-    padding: 0;
-    border: 0;
-    box-shadow: none;
+    padding: 24px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
     background: #fff;
+  }
+
+  /* Bayangan layar tidak transferable ke kertas, jadi dihapus saja. */
+  .content-card,
+  .document-sheet,
+  table,
+  tr {
+    box-shadow: none;
+  }
+
+  /* Warna teks dan garis tetap sama seperti di layar. */
+  html,
+  body {
+    background: #fff;
+  }
+
+  body {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
 
   .table-scroll {
@@ -2745,7 +2762,6 @@ tbody tr:hover {
 
   table {
     width: 100%;
-    font-size: 12px;
   }
 
   thead {
@@ -2758,15 +2774,6 @@ tbody tr:hover {
   }
 }
 
-/* Brand di atas dokumen cetak: warna dibuat gelap karena latar putih. */
-.document-brand .brand__word {
-  color: var(--green-950);
-}
-
-.document-brand .brand__mark {
-  border-radius: 10px 10px 10px 4px;
-}
-
 /* Konten yang tidak boleh ikut tercetak saat menyimpan PDF dokumen. */
 @media print {
   .no-print {
@@ -2774,11 +2781,39 @@ tbody tr:hover {
   }
 }
 
-/* Kop dokumen: logo + nama toko di kiri, nomor dokumen di kanan. */
+/* Kop dokumen: logo toko + nama toko di kiri, nomor dokumen di kanan. */
 .document-identity {
   display: flex;
   align-items: center;
   gap: 14px;
+}
+
+/*
+ * Logo toko memakai radius simetris dan overflow tersembunyi supaya ujung
+ * gambar tidak terpotong. Badge fallback memakai font yang eksplisit
+ * agar teks di dalam lingkaran tidak menyentuh tepi.
+ */
+.document-logo {
+  display: block;
+  flex: 0 0 auto;
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: #fff;
+  object-fit: contain;
+  overflow: hidden;
+}
+
+.document-logo--fallback {
+  display: grid;
+  place-items: center;
+  color: var(--green-950);
+  background: var(--green-100);
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1;
 }
 
 .document-store {
@@ -2792,4 +2827,20 @@ tbody tr:hover {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--muted);
+}
+
+/* Pengaturan logo usaha di halaman Profil dan modul. */
+.logo-settings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.logo-settings__controls {
+  display: flex;
+  flex: 1 1 320px;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 260px;
 }
