@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Brand } from "../../components/Brand";
 import { Alert, Spinner } from "../../components/Feedback";
 import { formatDateTime, formatNumber } from "../../lib/format";
 import { api, errorMessage } from "../../lib/api";
@@ -40,10 +41,12 @@ type Receipt = {
 export function ReceiptPage({
   documentNumber,
   documentType,
+  businessName,
   onGoBack,
 }: {
   documentNumber: string;
   documentType: "sale" | "purchase";
+  businessName: string;
   onGoBack: () => void;
 }) {
   const [receipt, setReceipt] = useState<Receipt | null>(null);
@@ -86,7 +89,7 @@ export function ReceiptPage({
           <h1>{documentLabel}</h1>
           <p className="muted">Nomor {documentNumber}</p>
         </div>
-        <div className="document-actions">
+        <div className="document-actions no-print">
           <button
             type="button"
             className="button button--primary"
@@ -102,17 +105,18 @@ export function ReceiptPage({
       {error && <Alert>{error}</Alert>}
 
       {loading ? (
-        <div className="flex-center" style={{ minHeight: 200 }}>
+        <div className="flex-center no-print" style={{ minHeight: 200 }}>
           <Spinner />
         </div>
       ) : receipt ? (
         <div className="content-card document-sheet">
           <header className="document-head">
-            <div>
-              <h2>{documentLabel}</h2>
-              <p className="muted" style={{ margin: "4px 0 0" }}>
-                Dicetak dari UsahainAja
-              </p>
+            <div className="document-identity">
+              <Brand />
+              <div>
+                <h2 className="document-store">{businessName}</h2>
+                <p className="document-store__type">{documentLabel}</p>
+              </div>
             </div>
             <div>
               <span className="document-head__label">Nomor dokumen</span>

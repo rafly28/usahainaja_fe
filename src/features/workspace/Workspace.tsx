@@ -286,7 +286,7 @@ export function Workspace({
             />
           )}
           {view === "opname" && <StockOpnamePage onGoBack={() => navigate("dashboard")} />}
-          {view === "documents" && (
+          {view === "documents" && !openDocument && (
             <DocumentsHub
               onOpenDocument={(document) => {
                 setOpenDocument(document);
@@ -299,6 +299,7 @@ export function Workspace({
             <ReceiptPage
               documentNumber={openDocument.number}
               documentType={openDocument.type}
+              businessName={enrichedBusiness.name}
               onGoBack={() => setOpenDocument(null)}
             />
           )}

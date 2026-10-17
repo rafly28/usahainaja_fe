@@ -2711,7 +2711,8 @@ tbody tr:hover {
   .page-heading,
   .document-actions,
   .feedback,
-  .mobile-nav {
+  .mobile-nav,
+  .no-print {
     display: none !important;
   }
 
@@ -2755,4 +2756,40 @@ tbody tr:hover {
   img {
     break-inside: avoid;
   }
+}
+
+/* Brand di atas dokumen cetak: warna dibuat gelap karena latar putih. */
+.document-brand .brand__word {
+  color: var(--green-950);
+}
+
+.document-brand .brand__mark {
+  border-radius: 10px 10px 10px 4px;
+}
+
+/* Konten yang tidak boleh ikut tercetak saat menyimpan PDF dokumen. */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* Kop dokumen: logo + nama toko di kiri, nomor dokumen di kanan. */
+.document-identity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.document-store {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.document-store__type {
+  margin: 2px 0 0;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
