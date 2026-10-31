@@ -162,14 +162,17 @@ export function StockAdjustmentsPage({
   }
 
   return (
-    <div className="page-stack max-w-3xl">
-      <div className="page-heading">
-        <button className="button button--secondary" onClick={onGoBack} type="button" style={{ padding: "0 12px" }}>
-          Kembali
-        </button>
+    <div className="page-stack">
+      <div className="page-head">
         <div>
+          <span className="eyebrow">Inventaris</span>
           <h1>Penyesuaian Stok</h1>
-          <p className="muted">Buat draft lebih dulu, lalu selesaikan saat stok fisik sudah dicek.</p>
+          <p>Buat draft lebih dulu, lalu selesaikan saat stok fisik sudah dicek.</p>
+        </div>
+        <div className="page-head__actions">
+          <button className="button button--secondary" onClick={onGoBack} type="button">
+            Kembali
+          </button>
         </div>
       </div>
 
@@ -181,32 +184,40 @@ export function StockAdjustmentsPage({
           <Spinner />
         </div>
       ) : (
-        <form className="content-card form-stack" onSubmit={submit} style={{ padding: 24, gap: 24 }}>
-          <div>
-            <label className="field">
-              <span>Lokasi *</span>
-              <select required value={locationCode} onChange={(event) => setLocationCode(event.target.value)}>
-                <option value="">-- Pilih Lokasi --</option>
-                {locations.map((location) => (
-                  <option key={location.code} value={location.code}>
-                    {location.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+        <form className="content-card" onSubmit={submit}>
+          <div className="content-card__header">
+            <div>
+              <h2>Buat Draft Penyesuaian</h2>
+              <p>Pilih lokasi dan barang yang mengalami perubahan stok fisik.</p>
+            </div>
+          </div>
+          <div style={{ padding: "var(--space-5)" }}>
+            <div className="form-grid-2">
+              <label className="field">
+                <span>Lokasi *</span>
+                <select required value={locationCode} onChange={(event) => setLocationCode(event.target.value)}>
+                  <option value="">-- Pilih Lokasi --</option>
+                  {locations.map((location) => (
+                    <option key={location.code} value={location.code}>
+                      {location.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
 
-            <label className="field" style={{ marginTop: 16 }}>
-              <span>Alasan Penyesuaian *</span>
-              <select required value={reason} onChange={(event) => setReason(event.target.value)}>
-                {ADJUSTMENT_REASONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+              <label className="field">
+                <span>Alasan Penyesuaian *</span>
+                <select required value={reason} onChange={(event) => setReason(event.target.value)}>
+                  {ADJUSTMENT_REASONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
 
-            <label className="field" style={{ marginTop: 16 }}>
+            <label className="field" style={{ marginTop: "var(--space-4)" }}>
               <span>Keterangan Tambahan</span>
               <textarea
                 value={notes}
@@ -216,14 +227,14 @@ export function StockAdjustmentsPage({
               />
             </label>
 
-            <div className="divider" style={{ margin: "24px 0" }} />
+            <div style={{ margin: "var(--space-5) 0", borderTop: "1px solid var(--line)" }} />
 
-            <h3 style={{ marginBottom: 16 }}>Daftar Barang</h3>
+            <h3 style={{ marginBottom: "var(--space-4)" }}>Daftar Barang</h3>
 
             {lines.map((line, index) => {
               const selectedProduct = trackedProducts.find((product) => getProductCode(product) === line.product_code);
               return (
-                <div key={index} style={{ display: "flex", gap: 12, marginBottom: 16, alignItems: "flex-end" }}>
+                <div key={index} style={{ display: "flex", gap: "var(--space-3)", marginBottom: "var(--space-3)", alignItems: "flex-end" }}>
                   <label className="field" style={{ flex: 2, marginBottom: 0 }}>
                     <span className="sr-only">Produk</span>
                     <select
@@ -243,7 +254,7 @@ export function StockAdjustmentsPage({
                   <label className="field" style={{ flex: 1, marginBottom: 0 }}>
                     <span className="sr-only">Arah</span>
                     <select required value={line.direction} onChange={(event) => updateLine(index, "direction", event.target.value)}>
-                      <option value="OUT">Kurangi (-)</option>
+                      <option value="OUT">Kurangi (−)</option>
                       <option value="IN">Tambah (+)</option>
                     </select>
                   </label>
@@ -269,7 +280,7 @@ export function StockAdjustmentsPage({
                       type="button"
                       className="button button--ghost"
                       onClick={() => removeLine(index)}
-                      style={{ height: 38, padding: "0 12px", color: "var(--color-danger)" }}
+                      style={{ height: 38, padding: "0 12px", color: "var(--action-danger-soft-text, #c92a2a)" }}
                       aria-label="Hapus"
                     >
                       <Icon name="trash" size={16} />
@@ -283,19 +294,19 @@ export function StockAdjustmentsPage({
               type="button"
               className="button button--secondary"
               onClick={addLine}
-              style={{ alignSelf: "flex-start", marginTop: 8 }}
+              style={{ alignSelf: "flex-start", marginTop: "var(--space-2)" }}
             >
               <Icon name="plus" size={16} /> Tambah Baris
             </button>
-          </div>
 
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 16 }}>
-            <button type="button" className="button button--ghost" onClick={onGoBack}>
-              Batal
-            </button>
-            <button type="submit" className="button button--primary" disabled={submitting || trackedProducts.length === 0}>
-              {submitting ? "Menyimpan draft..." : "Simpan Draft"}
-            </button>
+            <div className="form-actions" style={{ marginTop: "var(--space-5)" }}>
+              <button type="button" className="button button--ghost" onClick={onGoBack}>
+                Batal
+              </button>
+              <button type="submit" className="button button--primary" disabled={submitting || trackedProducts.length === 0}>
+                {submitting ? "Menyimpan draft..." : "Simpan Draft"}
+              </button>
+            </div>
           </div>
         </form>
       )}
@@ -304,7 +315,7 @@ export function StockAdjustmentsPage({
         <div className="content-card__header">
           <div>
             <h2>Draft menunggu diselesaikan</h2>
-            <p className="muted">Stok baru berubah setelah draft diselesaikan.</p>
+            <p>Stok baru berubah setelah draft diselesaikan.</p>
           </div>
           <button type="button" className="button button--ghost" onClick={() => void loadDrafts()}>
             Muat ulang
@@ -319,28 +330,30 @@ export function StockAdjustmentsPage({
           <EmptyState title="Tidak ada draft" description="Draft yang dibuat akan muncul di sini sampai diselesaikan." />
         ) : (
           <div className="table-scroll">
-            <table className="data-table">
+            <table>
               <thead>
                 <tr>
-                  <th>Nomor</th>
-                  <th>Dibuat</th>
-                  <th>Lokasi</th>
-                  <th>Alasan</th>
-                  <th className="text-right">Aksi</th>
+                  <th scope="col">Nomor</th>
+                  <th scope="col">Dibuat</th>
+                  <th scope="col">Lokasi</th>
+                  <th scope="col">Alasan</th>
+                  <th scope="col" className="actions">
+                    Aksi
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {drafts.map((draft) => (
                   <tr key={draft.adjustment_number}>
-                    <td className="font-medium">{draft.adjustment_number}</td>
-                    <td className="muted">{formatDateTime(draft.adjustment_date)}</td>
+                    <td className="doc-no">{draft.adjustment_number}</td>
+                    <td style={{ color: "var(--text-muted)" }}>{formatDateTime(draft.adjustment_date)}</td>
                     <td>{draft.location_code}</td>
                     <td>{draft.reason}</td>
-                    <td className="text-right">
-                      <div style={{ display: "inline-flex", gap: 8, justifyContent: "flex-end" }}>
+                    <td className="actions">
+                      <div style={{ display: "inline-flex", gap: "var(--space-2)", justifyContent: "flex-end" }}>
                         <button
                           type="button"
-                          className="button button--secondary"
+                          className="link-button"
                           onClick={() => setSelected(selected === draft.adjustment_number ? "" : draft.adjustment_number)}
                         >
                           {selected === draft.adjustment_number ? "Tutup" : "Rincian"}

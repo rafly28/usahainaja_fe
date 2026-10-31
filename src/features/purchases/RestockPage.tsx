@@ -1,24 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert, EmptyState, SkeletonRows } from "../../components/Feedback";
+import { Alert } from "../../components/Feedback";
 import { Icon } from "../../components/Icons";
 import { api, errorMessage, ApiError } from "../../lib/api";
 import { formatCurrency } from "../../lib/format";
 import { getProductCode, getProductUnit, type Product, type PurchaseItem, type Location, type Contact, type CashAccount } from "../../types";
+import { PurchasesListSection, type PurchaseDoc } from "./PurchasesListSection";
 
 type RestockItem = PurchaseItem & {
   name: string;
   unit?: string;
 };
-
-interface PurchaseDoc {
-  purchase_number: string;
-  purchase_date: string;
-  supplier_name?: string;
-  status: string;
-  payment_status?: string;
-  grand_total: string;
-  item_count?: number;
-}
 
 export function RestockPage({
   products,
@@ -31,19 +22,18 @@ export function RestockPage({
 }) {
   const [purchases, setPurchases] = useState<PurchaseDoc[]>([]);
   const [loadingPurchases, setLoadingPurchases] = useState(true);
-  const [purchaseSearch, setPurchaseSearch] = useState("");
 
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<RestockItem[]>([]);
   const [discountTotal, setDiscountTotal] = useState<number>(0);
   const [taxTotal, setTaxTotal] = useState<number>(0);
   const [referenceNumber, setReferenceNumber] = useState("");
-  
+
   // Dropdown data
   const [locations, setLocations] = useState<Location[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [cashAccounts, setCashAccounts] = useState<CashAccount[]>([]);
-  
+
   // Selected values
   const [locationCode, setLocationCode] = useState("");
   const [supplierCode, setSupplierCode] = useState("");
@@ -67,7 +57,7 @@ export function RestockPage({
         setContacts((conRes || []).filter(c => c.contact_type === "SUPPLIER" || c.contact_type === "BOTH"));
         setCashAccounts(cashRes || []);
         setPurchases((purchaseRes as PurchaseDoc[]) || []);
-        
+
         if (locRes && locRes.length > 0) setLocationCode(locRes[0]?.code ?? locRes[0]?.public_code ?? "");
         if (cashRes && cashRes.length > 0) setCashAccountCode(cashRes[0]?.code ?? cashRes[0]?.public_code ?? "");
       } catch (err) {
@@ -89,16 +79,6 @@ export function RestockPage({
           .includes(term),
     );
   }, [products, search]);
-
-  const filteredPurchases = useMemo(() => {
-    const term = purchaseSearch.trim().toLowerCase();
-    if (!term) return purchases;
-    return purchases.filter(
-      (p) =>
-        p.purchase_number.toLowerCase().includes(term) ||
-        (p.supplier_name && p.supplier_name.toLowerCase().includes(term)),
-    );
-  }, [purchases, purchaseSearch]);
 
   const subtotal = cart.reduce(
     (sum, item) => sum + Number(item.quantity) * Number(item.unit_price) - Number(item.discount),
@@ -187,15 +167,6 @@ export function RestockPage({
           line_number: it.line_number ?? idx + 1,
           received_quantity: it.quantity,
         }));
-        if (lines.length === 0) {
-          const detail = (await api.purchases.get(purchaseNumber).catch(() => null)) as unknown as {
-            items?: { line_number: number; quantity: string }[];
-          } | null;
-          lines = (detail?.items ?? []).map((it, idx) => ({
-            line_number: it.line_number ?? idx + 1,
-            received_quantity: it.quantity,
-          }));
-        }
       }
 
       if (action === "receive" || action === "pay") {
@@ -242,17 +213,6 @@ export function RestockPage({
     }
   }
 
-  function getStatusBadge(status: string) {
-    const s = status.toUpperCase();
-    if (s === "RECEIVED" || s === "COMPLETED" || s === "PAID") {
-      return <span className="status-pill status-pill--ok"><i />Diterima</span>;
-    }
-    if (s === "PARTIAL") {
-      return <span className="status-pill status-pill--warn"><i />Sebagian</span>;
-    }
-    return <span className="status-pill status-pill--neutral"><i />Draf</span>;
-  }
-
   return (
     <div className="content-stack">
       <div className="page-heading">
@@ -263,68 +223,7 @@ export function RestockPage({
         </div>
       </div>
 
-      {/* 1. DAFTAR PEMBELIAN SEKSI */}
-      <section className="content-card">
-        <div className="content-card__header">
-          <div>
-            <h2>Daftar pembelian</h2>
-            <p>
-              {purchases.length} dokumen pembelian terdaftar.
-            </p>
-          </div>
-          <div className="search-field" style={{ width: "240px" }}>
-            <Icon name="search" size={16} />
-            <input
-              placeholder="Cari nomor atau supplier"
-              value={purchaseSearch}
-              onChange={(e) => setPurchaseSearch(e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className="table-scroll">
-          <table>
-            <thead>
-              <tr>
-                <th scope="col">Nomor</th>
-                <th scope="col">Supplier</th>
-                <th scope="col">Tanggal</th>
-                <th scope="col" className="num">Total</th>
-                <th scope="col">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loadingPurchases ? (
-                <SkeletonRows columns={5} rows={3} />
-              ) : filteredPurchases.length === 0 ? (
-                <tr>
-                  <td colSpan={5} style={{ padding: 0 }}>
-                    <EmptyState
-                      title="Belum ada dokumen pembelian"
-                      description="Pilih produk pada formulir di bawah untuk membuat draf restock baru."
-                    />
-                  </td>
-                </tr>
-              ) : (
-                filteredPurchases.slice(0, 5).map((p) => (
-                  <tr key={p.purchase_number}>
-                    <td className="doc-no"><strong>{p.purchase_number}</strong></td>
-                    <td>{p.supplier_name || "Tanpa supplier"}</td>
-                    <td>{p.purchase_date ? new Date(p.purchase_date).toLocaleDateString("id-ID") : "-"}</td>
-                    <td className="num">{formatCurrency(p.grand_total)}</td>
-                    <td>{getStatusBadge(p.status)}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-        {filteredPurchases.length > 0 && (
-          <div className="table-footer">
-            <span>Menampilkan {Math.min(5, filteredPurchases.length)} dari {filteredPurchases.length} dokumen.</span>
-          </div>
-        )}
-      </section>
+      <PurchasesListSection purchases={purchases} loading={loadingPurchases} />
 
       {/* 2. FORM RESTOCK DUA ZONA (SPLIT) */}
       <div className="split" style={{ marginTop: "var(--space-5)" }}>
@@ -446,9 +345,7 @@ export function RestockPage({
                             style={{ width: "100px" }}
                           />
                         </td>
-                        <td className="num">
-                          {formatCurrency(Number(item.quantity) * Number(item.unit_price))}
-                        </td>
+                        <td className="num">{formatCurrency(Number(item.quantity) * Number(item.unit_price))}</td>
                         <td className="actions">
                           <button
                             type="button"
@@ -538,18 +435,14 @@ export function RestockPage({
               />
             </div>
             <div className="summary-grand" aria-live="polite">
-              <span>Total pembelian</span>
+              <span>Total pembelian </span>
               <strong className="num">{formatCurrency(grandTotal)}</strong>
             </div>
 
             <div className="form-stack" style={{ gap: "var(--space-3)", marginTop: "var(--space-4)" }}>
               <label className="field">
                 <span>Lokasi penerimaan <em>*</em></span>
-                <select
-                  value={locationCode}
-                  onChange={(e) => setLocationCode(e.target.value)}
-                  required
-                >
+                <select value={locationCode} onChange={(e) => setLocationCode(e.target.value)} required>
                   <option value="" disabled>Pilih Lokasi Penerimaan</option>
                   {locations.map((loc) => {
                     const code = loc.code ?? loc.public_code ?? "";
@@ -560,10 +453,7 @@ export function RestockPage({
 
               <label className="field">
                 <span>Supplier</span>
-                <select
-                  value={supplierCode}
-                  onChange={(e) => setSupplierCode(e.target.value)}
-                >
+                <select value={supplierCode} onChange={(e) => setSupplierCode(e.target.value)}>
                   <option value="">Tanpa supplier (Pemasok umum)</option>
                   {contacts.map((c) => {
                     const code = c.code ?? c.public_code ?? "";

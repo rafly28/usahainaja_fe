@@ -100,16 +100,19 @@ export function StockMovementsPage({ onGoBack }: { onGoBack?: () => void }) {
 
   return (
     <div className="page-stack">
-      <div className="page-heading">
-        {onGoBack && (
-          <button className="button button--secondary" onClick={onGoBack} type="button" style={{ padding: "0 12px" }}>
-            Kembali
-          </button>
-        )}
+      <div className="page-head">
         <div>
+          <span className="eyebrow">Inventaris</span>
           <h1>Riwayat Pergerakan Stok</h1>
-          <p className="muted">Setiap perubahan stok dapat ditelusuri dari ledger yang sama.</p>
+          <p>Setiap perubahan stok dapat ditelusuri dari ledger yang sama.</p>
         </div>
+        {onGoBack && (
+          <div className="page-head__actions">
+            <button className="button button--secondary" onClick={onGoBack} type="button">
+              Kembali
+            </button>
+          </div>
+        )}
       </div>
 
       {error && (
@@ -121,55 +124,64 @@ export function StockMovementsPage({ onGoBack }: { onGoBack?: () => void }) {
         </Alert>
       )}
 
-      <form className="content-card" onSubmit={applyFilters} style={{ padding: 16, display: "grid", gap: 12 }}>
+      <form className="content-card" onSubmit={applyFilters}>
         <div className="content-card__header">
           <div>
             <h2>Filter</h2>
-            <p className="muted">Saring ledger berdasarkan produk, lokasi, jenis, atau tanggal.</p>
+            <p>Saring ledger berdasarkan produk, lokasi, jenis, atau tanggal.</p>
           </div>
         </div>
-        <div className="form-grid">
-          <label className="field">
-            <span>Kode produk</span>
-            <input value={productCode} onChange={(event) => setProductCode(event.target.value)} placeholder="PRD-000001" />
-          </label>
-          <label className="field">
-            <span>Lokasi</span>
-            <select value={locationCode} onChange={(event) => setLocationCode(event.target.value)}>
-              <option value="">Semua lokasi</option>
-              {locations.map((location) => (
-                <option key={location.code ?? location.public_code} value={location.code ?? location.public_code}>
-                  {location.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span>Jenis pergerakan</span>
-            <select value={movementType} onChange={(event) => setMovementType(event.target.value)}>
-              {MOVEMENT_TYPES.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field">
-            <span>Dari tanggal</span>
-            <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
-          </label>
-          <label className="field">
-            <span>Sampai tanggal</span>
-            <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
-          </label>
-        </div>
-        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <button type="button" className="button button--ghost" onClick={resetFilters}>
-            Reset
-          </button>
-          <button type="submit" className="button button--primary" disabled={loading}>
-            Terapkan filter
-          </button>
+        <div style={{ padding: "var(--space-5)" }}>
+          <div className="form-grid">
+            <label className="field">
+              <span>Kode produk</span>
+              <input
+                value={productCode}
+                onChange={(event) => setProductCode(event.target.value)}
+                placeholder="PRD-000001"
+              />
+            </label>
+            <label className="field">
+              <span>Lokasi</span>
+              <select value={locationCode} onChange={(event) => setLocationCode(event.target.value)}>
+                <option value="">Semua lokasi</option>
+                {locations.map((location) => (
+                  <option
+                    key={location.code ?? location.public_code}
+                    value={location.code ?? location.public_code}
+                  >
+                    {location.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Jenis pergerakan</span>
+              <select value={movementType} onChange={(event) => setMovementType(event.target.value)}>
+                {MOVEMENT_TYPES.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>Dari tanggal</span>
+              <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
+            </label>
+            <label className="field">
+              <span>Sampai tanggal</span>
+              <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
+            </label>
+          </div>
+          <div className="form-actions" style={{ marginTop: "var(--space-4)" }}>
+            <button type="button" className="button button--ghost" onClick={resetFilters}>
+              Reset
+            </button>
+            <button type="submit" className="button button--primary" disabled={loading}>
+              Terapkan filter
+            </button>
+          </div>
         </div>
       </form>
 
@@ -178,73 +190,104 @@ export function StockMovementsPage({ onGoBack }: { onGoBack?: () => void }) {
           <Spinner />
         </div>
       ) : movements.length === 0 && !error ? (
-        <EmptyState
-          title="Belum ada pergerakan stok"
-          description="Ledger akan terisi otomatis saat ada stok awal, pembelian, penjualan, atau penyesuaian."
-        />
+        <section className="content-card">
+          <EmptyState
+            title="Belum ada pergerakan stok"
+            description="Ledger akan terisi otomatis saat ada stok awal, pembelian, penjualan, atau penyesuaian."
+          />
+        </section>
       ) : (
-        <>
-          <div className="card table-responsive">
-            <table className="data-table">
+        <section className="content-card">
+          <div className="table-scroll">
+            <table>
               <thead>
                 <tr>
-                  <th>Waktu</th>
-                  <th>Jenis</th>
-                  <th>Produk</th>
-                  <th>Lokasi</th>
-                  <th className="text-right">Kuantitas</th>
-                  <th>Alasan</th>
-                  <th>Oleh</th>
+                  <th scope="col">Waktu</th>
+                  <th scope="col">Jenis</th>
+                  <th scope="col">Produk</th>
+                  <th scope="col">Lokasi</th>
+                  <th scope="col" className="num">
+                    Kuantitas
+                  </th>
+                  <th scope="col">Alasan</th>
+                  <th scope="col">Oleh</th>
                 </tr>
               </thead>
               <tbody>
-                {movements.map((movement, index) => (
-                  <tr key={`${movement.product_code}-${movement.occurred_at}-${index}`}>
-                    <td className="muted">{formatDateTime(movement.occurred_at)}</td>
-                    <td>{movementLabel(movement.movement_type)}</td>
-                    <td>
-                      <div className="font-medium">{movement.product_name}</div>
-                      <div className="text-xs muted">{movement.product_code}</div>
-                    </td>
-                    <td>{movement.location_name}</td>
-                    <td className="text-right">
-                      <span className={movement.direction === "IN" ? "color-success" : "color-danger"}>
-                        {movement.direction === "IN" ? "+" : "-"}
-                        {formatNumber(movement.quantity)} {movement.unit_symbol}
-                      </span>
-                    </td>
-                    <td className="muted text-sm">{movement.reason || "-"}</td>
-                    <td>{movement.created_by_name || "-"}</td>
-                  </tr>
-                ))}
+                {movements.map((movement, index) => {
+                  const isIncoming = movement.direction === "IN";
+                  const mark = movement.product_name?.trim().slice(0, 2).toUpperCase() || "PR";
+                  return (
+                    <tr key={`${movement.product_code}-${movement.occurred_at}-${index}`}>
+                      <td style={{ color: "var(--text-muted)" }}>{formatDateTime(movement.occurred_at)}</td>
+                      <td>
+                        <span className="status-pill">
+                          <i />
+                          {movementLabel(movement.movement_type)}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="product-cell">
+                          <span className="product-cell__mark">{mark}</span>
+                          <div>
+                            <strong>{movement.product_name}</strong>
+                            <small>{movement.product_code}</small>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="cell-stack">
+                          <strong>{movement.location_name || "Lokasi Utama"}</strong>
+                          <small>{movement.location_code || "—"}</small>
+                        </div>
+                      </td>
+                      <td className="num">
+                        <span
+                          className={`status-pill ${
+                            isIncoming ? "status-pill--ok" : "status-pill--warn"
+                          }`}
+                        >
+                          <i />
+                          {isIncoming ? "+" : "−"}
+                          {formatNumber(movement.quantity)}
+                        </span>
+                        <span className="unit">{movement.unit_symbol}</span>
+                      </td>
+                      <td style={{ color: "var(--text-muted)" }}>{movement.reason || "—"}</td>
+                      <td>{movement.created_by_name || "—"}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
 
-          {pagination.total > PAGE_SIZE && (
-            <div style={{ display: "flex", gap: 8, alignItems: "center", justifyContent: "flex-end" }}>
-              <span className="muted text-sm">
-                Halaman {pagination.page} dari {totalPages} · total {pagination.total} baris
-              </span>
-              <button
-                type="button"
-                className="button button--secondary"
-                disabled={page <= 1}
-                onClick={() => setPage((current) => Math.max(1, current - 1))}
-              >
-                Sebelumnya
-              </button>
-              <button
-                type="button"
-                className="button button--secondary"
-                disabled={page >= totalPages}
-                onClick={() => setPage((current) => current + 1)}
-              >
-                Berikutnya
-              </button>
-            </div>
-          )}
-        </>
+          <div className="table-footer">
+            <span>
+              Menampilkan {movements.length} baris · Halaman {pagination.page} dari {totalPages}
+            </span>
+            {pagination.total > PAGE_SIZE && (
+              <div style={{ display: "inline-flex", gap: "var(--space-2)" }}>
+                <button
+                  type="button"
+                  className="button button--secondary"
+                  disabled={page <= 1}
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                >
+                  Sebelumnya
+                </button>
+                <button
+                  type="button"
+                  className="button button--secondary"
+                  disabled={page >= totalPages}
+                  onClick={() => setPage((current) => current + 1)}
+                >
+                  Berikutnya
+                </button>
+              </div>
+            )}
+          </div>
+        </section>
       )}
     </div>
   );

@@ -20,6 +20,8 @@ export function StockAdjustmentDetail({
 }: {
   adjustmentNumber: string;
   onGoBack: () => void;
+  title?: string;
+  adjustmentType?: string;
 }) {
   const [adjustment, setAdjustment] = useState<StockAdjustment | null>(null);
   const [loading, setLoading] = useState(true);
@@ -51,9 +53,9 @@ export function StockAdjustmentDetail({
         <div>
           <h2>Rincian {adjustmentNumber}</h2>
           {adjustment && (
-            <p className="muted">
-              {KIND_LABELS[adjustment.adjustment_kind] ?? adjustment.adjustment_kind} · {adjustment.status} ·{" "}
-              {formatDateTime(adjustment.adjustment_date)}
+            <p>
+              {KIND_LABELS[adjustment.adjustment_kind] ?? adjustment.adjustment_kind} ·{" "}
+              {adjustment.status} · {formatDateTime(adjustment.adjustment_date)}
             </p>
           )}
         </div>
@@ -70,34 +72,62 @@ export function StockAdjustmentDetail({
         </div>
       ) : adjustment ? (
         <div className="table-scroll">
-          <table className="data-table">
+          <table>
             <thead>
               <tr>
-                <th>Produk</th>
-                <th className="text-right">Sistem</th>
-                <th className="text-right">Hitung fisik</th>
-                <th className="text-right">Selisih</th>
-                <th>Satuan</th>
+                <th scope="col">Produk</th>
+                <th scope="col" className="num">
+                  Sistem
+                </th>
+                <th scope="col" className="num">
+                  Hitung fisik
+                </th>
+                <th scope="col" className="num">
+                  Selisih
+                </th>
+                <th scope="col">Satuan</th>
               </tr>
             </thead>
             <tbody>
-              {adjustment.items.map((item) => (
-                <tr key={`${item.product_code}-${item.quantity}`}>
-                  <td>
-                    <div className="font-medium">{item.product_name}</div>
-                    <div className="text-xs muted">{item.product_code}</div>
-                  </td>
-                  <td className="text-right muted">{item.system_quantity ? formatNumber(item.system_quantity) : "-"}</td>
-                  <td className="text-right muted">{item.counted_quantity ? formatNumber(item.counted_quantity) : "-"}</td>
-                  <td className="text-right">
-                    <span className={item.direction === "IN" ? "color-success" : "color-danger"}>
-                      {item.direction === "IN" ? "+" : "-"}
-                      {formatNumber(item.quantity)}
-                    </span>
-                  </td>
-                  <td>{item.unit_symbol}</td>
-                </tr>
-              ))}
+              {adjustment.items.map((item) => {
+                const mark = item.product_name?.trim().slice(0, 2).toUpperCase() || "PR";
+                const isIncoming = item.direction === "IN";
+                return (
+                  <tr key={`${item.product_code}-${item.quantity}`}>
+                    <td>
+                      <div className="product-cell">
+                        <span className="product-cell__mark">{mark}</span>
+                        <div>
+                          <strong>{item.product_name}</strong>
+                          <small>{item.product_code}</small>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="num">
+                      {item.system_quantity !== undefined && item.system_quantity !== null
+                        ? formatNumber(item.system_quantity)
+                        : "—"}
+                    </td>
+                    <td className="num">
+                      {item.counted_quantity !== undefined && item.counted_quantity !== null
+                        ? formatNumber(item.counted_quantity)
+                        : "—"}
+                    </td>
+                    <td className="num">
+                      <span
+                        className={`status-pill ${
+                          isIncoming ? "status-pill--ok" : "status-pill--warn"
+                        }`}
+                      >
+                        <i />
+                        {isIncoming ? "+" : "−"}
+                        {formatNumber(item.quantity)}
+                      </span>
+                    </td>
+                    <td>{item.unit_symbol}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
