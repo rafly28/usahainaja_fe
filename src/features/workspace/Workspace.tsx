@@ -326,6 +326,7 @@ export function Workspace({
                 setOpenDocument({ number: receipt, type: "sale" });
               }} 
               onGoToProducts={() => navigate("products")} 
+              onGoToHistory={() => navigate("documents")}
             />
           )}
           {view === "restock" && (

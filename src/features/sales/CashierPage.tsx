@@ -15,10 +15,12 @@ export function CashierPage({
   products,
   onSaleCreated,
   onGoToProducts,
+  onGoToHistory,
 }: {
   products: Product[];
   onSaleCreated: (receiptNumber: string) => void;
   onGoToProducts: () => void;
+  onGoToHistory?: () => void;
 }) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState("");
@@ -234,235 +236,248 @@ export function CashierPage({
     return () => window.removeEventListener("keydown", onKeyDown);
   });
 
+  const activeLocation = locations.find(
+    (l) => (l.code ?? l.public_code) === locationCode,
+  );
+  const locationLabel = activeLocation?.name || "Lokasi Utama";
+
   return (
-    <div className="pos-layout">
-      <div className="pos-products">
-        <div className="page-heading">
-          <div>
-            <p className="eyebrow">TRANSAKSI</p>
-            <h1>Kasir (POS)</h1>
-            <p className="muted">Pilih produk untuk menambahkannya ke keranjang pesanan.</p>
+    <>
+      <div className="page-head">
+        <div>
+          <span className="eyebrow" style={{ color: "#5b6660" }}>Transaksi</span>
+          <h1>Kasir (POS)</h1>
+          <p>{locationLabel} · Pilih produk untuk menambahkannya ke keranjang pesanan.</p>
+        </div>
+        {onGoToHistory && (
+          <div className="page-head__actions">
+            <button
+              type="button"
+              className="button button--secondary"
+              onClick={onGoToHistory}
+            >
+              Riwayat transaksi
+            </button>
           </div>
-        </div>
-
-        <div className="pos-search">
-          <Icon name="search" size={20} />
-          <input
-            ref={searchInputRef}
-            autoFocus
-            placeholder="Cari nama, SKU, atau pindai barcode... (F2)"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-
-        <div className="pos-grid">
-          {filtered.map((product) => {
-            const code = getProductCode(product);
-            const inCart = cart.find((item) => item.product_code === code);
-            const stockQty = Number(product.quantity ?? product.stock ?? 0);
-            const isOutOfStock = product.is_stock_tracked !== false && stockQty <= 0;
-            const unit = getProductUnit(product);
-
-            return (
-              <button
-                key={code}
-                className={`pos-item-card ${inCart ? "is-in-cart" : ""} ${isOutOfStock ? "is-out-of-stock" : ""}`}
-                onClick={() => addToCart(product)}
-                type="button"
-                disabled={isOutOfStock}
-              >
-                <div className="pos-item-card__header">
-                  <div className="pos-item-card__abbr">
-                    {product.name.slice(0, 1).toUpperCase()}
-                  </div>
-                  {inCart && (
-                    <span className="pos-item-card__cart-badge">
-                      {inCart.quantity}x
-                    </span>
-                  )}
-                </div>
-                <div className="pos-item-card__info">
-                  <strong title={product.name}>{product.name}</strong>
-                  {product.category_name && (
-                    <span className="pos-item-card__category">{product.category_name}</span>
-                  )}
-                  <div className="pos-item-card__price-row">
-                    <p className="pos-item-card__price num">
-                      {formatCurrency(product.default_selling_price)}
-                    </p>
-                    <span className={`stock-pill ${isOutOfStock ? "stock-pill--empty" : stockQty < 5 ? "stock-pill--low" : "stock-pill--ok"}`}>
-                      {isOutOfStock ? "Habis" : `Stok ${stockQty} ${unit}`}
-                    </span>
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-          {filtered.length === 0 && (
-            <div className="pos-empty-search">
-              Produk tidak ditemukan.{" "}
-              <button type="button" className="link-button" onClick={onGoToProducts}>
-                Tambah produk baru
-              </button>
-            </div>
-          )}
-        </div>
+        )}
       </div>
 
-      <div className="pos-cart">
-        <div className="pos-cart__header">
-          <h2>Pesanan saat ini</h2>
-          <button
-            type="button"
-            className="link-button"
-            style={{ color: "var(--action-danger-soft-text)" }}
-            onClick={() => {
-              if (cart.length === 0) return;
-              if (window.confirm("Kosongkan keranjang pesanan?")) setCart([]);
-            }}
-          >
-            Kosongkan
-          </button>
-        </div>
-
-        <div className="pos-cart__items">
-          {cart.length === 0 ? (
-            <div className="pos-cart__empty">
-              <EmptyState
-                title="Belum ada produk dipilih"
-                description="Pilih produk dari katalog di sebelah kiri atau tekan F2 untuk mencari."
+      <div className="pos-layout">
+        <div>
+          <div className="pos-toolbar">
+            <div className="search-field">
+              <Icon name="search" size={16} />
+              <input
+                ref={searchInputRef}
+                autoFocus
+                placeholder="Cari nama, SKU, atau pindai barcode... (F2)"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-          ) : (
-            cart.map((item) => (
-              <div key={item.product_code} className="cart-item">
-                <div className="cart-item__details">
-                  <strong>{item.name}</strong>
-                  <p className="num">{formatCurrency(item.unit_price)} per {item.unit}</p>
-                  {item.maxStock > 0 && (
-                    <small style={{ color: "var(--text-muted)" }}>
-                      Sisa {Math.max(0, item.maxStock - Number(item.quantity))} {item.unit}
-                    </small>
-                  )}
-                </div>
-                <div className="cart-item__actions">
-                  <button type="button" onClick={() => updateQuantity(item.product_code, Number(item.quantity) - 1)}>
-                    -
-                  </button>
-                  <span className="num">{item.quantity}</span>
-                  <button type="button" onClick={() => updateQuantity(item.product_code, Number(item.quantity) + 1)}>
-                    +
-                  </button>
-                </div>
-                <div className="cart-item__total num">
-                  {formatCurrency(Number(item.quantity) * Number(item.unit_price))}
-                </div>
+          </div>
+
+          <div className="pos-grid">
+            {filtered.map((product) => {
+              const code = getProductCode(product);
+              const inCart = cart.find((item) => item.product_code === code);
+              const stockQty = Number(product.quantity ?? product.stock ?? 0);
+              const isOutOfStock = product.is_stock_tracked !== false && stockQty <= 0;
+              const isLowStock = !isOutOfStock && stockQty < 5;
+              const unit = getProductUnit(product);
+
+              return (
+                <button
+                  key={code}
+                  type="button"
+                  className={`pos-item ${inCart ? "is-in-cart" : ""}`}
+                  onClick={() => addToCart(product)}
+                  disabled={isOutOfStock}
+                >
+                  <span className="pos-item__head">
+                    <span>{product.category_name || (product.sku ? `SKU: ${product.sku}` : "PRODUK")}</span>
+                    {inCart && <span className="pos-item__badge">{inCart.quantity}x</span>}
+                  </span>
+                  <strong title={product.name}>{product.name}</strong>
+                  <span className="pos-item__price">
+                    {formatCurrency(product.default_selling_price)}
+                  </span>
+                  <span className="pos-item__stock">
+                    <span className={`status-pill ${isOutOfStock ? "status-pill--danger" : isLowStock ? "status-pill--warn" : "status-pill--ok"}`}>
+                      <i />
+                      {isOutOfStock ? "Habis" : isLowStock ? "Menipis" : "Aman"}
+                    </span>
+                    {isOutOfStock ? "Stok habis" : `${stockQty} ${unit} tersedia`}
+                  </span>
+                </button>
+              );
+            })}
+            {filtered.length === 0 && (
+              <div className="pos-empty-search">
+                Produk tidak ditemukan.{" "}
+                <button type="button" className="link-button" onClick={onGoToProducts}>
+                  Tambah produk baru
+                </button>
               </div>
-            ))
-          )}
+            )}
+          </div>
         </div>
 
-        <div className="pos-cart__summary">
-          <div className="summary-row">
-            <span>Subtotal</span>
-            <span className="num">{formatCurrency(subtotal)}</span>
-          </div>
-          <div className="summary-row text-success">
-            <span>Diskon</span>
-            <div style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-              <span className="unit">Rp</span>
-              <input
-                type="number"
-                min="0"
-                className="summary-input num"
-                value={discountTotal || ""}
-                onChange={(e) => setDiscountTotal(Math.max(0, Number(e.target.value) || 0))}
-                placeholder="0"
-              />
-            </div>
-          </div>
-          <div className="summary-row">
-            <span>Pajak</span>
-            <div style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
-              <span className="unit">Rp</span>
-              <input
-                type="number"
-                min="0"
-                className="summary-input num"
-                value={taxTotal || ""}
-                onChange={(e) => setTaxTotal(Math.max(0, Number(e.target.value) || 0))}
-                placeholder="0"
-              />
-            </div>
-          </div>
-          <div className="summary-row summary-grand" aria-live="polite">
-            <span>Total Tagihan</span>
-            <span className="num">{formatCurrency(grandTotal)}</span>
+        <div className="cart">
+          <div className="cart__header">
+            <h2>Pesanan saat ini</h2>
+            <button
+              type="button"
+              className="link-button link-button--danger"
+              onClick={() => {
+                if (cart.length === 0) return;
+                if (window.confirm("Kosongkan keranjang pesanan?")) setCart([]);
+              }}
+            >
+              Kosongkan
+            </button>
           </div>
 
-          {error && <div style={{ marginTop: "var(--space-2)" }}><Alert tone="error">{error}</Alert></div>}
+          <div className="cart__items">
+            {cart.length === 0 ? (
+              <div className="cart__empty">
+                <EmptyState
+                  title="Belum ada produk dipilih"
+                  description="Pilih produk dari katalog di sebelah kiri atau tekan F2 untuk mencari."
+                />
+              </div>
+            ) : (
+              cart.map((item) => (
+                <div key={item.product_code} className="cart-item">
+                  <strong>{item.name}</strong>
+                  <span className="cart-item__total">
+                    {formatCurrency(Number(item.quantity) * Number(item.unit_price))}
+                  </span>
+                  <span className="cart-item__qty">
+                    {formatCurrency(item.unit_price)} per {item.unit}
+                    <span className="stepper">
+                      <button
+                        type="button"
+                        aria-label="Kurangi kuantitas"
+                        onClick={() => updateQuantity(item.product_code, Number(item.quantity) - 1)}
+                      >
+                        -
+                      </button>
+                      <b>{item.quantity}</b>
+                      <button
+                        type="button"
+                        aria-label="Tambah kuantitas"
+                        onClick={() => updateQuantity(item.product_code, Number(item.quantity) + 1)}
+                      >
+                        +
+                      </button>
+                    </span>
+                  </span>
+                  <span className="cart-item__qty">
+                    {item.maxStock > 0 ? `Sisa ${Math.max(0, item.maxStock - Number(item.quantity))} ${item.unit}` : ""}
+                  </span>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="cart__summary">
+            <div className="summary-row">
+              <span>Subtotal</span>
+              <span>{formatCurrency(subtotal)}</span>
+            </div>
+            <div className="summary-row summary-row--edit">
+              <span>Diskon</span>
+              <span className="money-input">
+                Rp
+                <input
+                  type="number"
+                  min="0"
+                  className="num"
+                  value={discountTotal || ""}
+                  onChange={(e) => setDiscountTotal(Math.max(0, Number(e.target.value) || 0))}
+                  placeholder="0"
+                />
+              </span>
+            </div>
+            <div className="summary-row summary-row--edit">
+              <span>Pajak</span>
+              <span className="money-input">
+                Rp
+                <input
+                  type="number"
+                  min="0"
+                  className="num"
+                  value={taxTotal || ""}
+                  onChange={(e) => setTaxTotal(Math.max(0, Number(e.target.value) || 0))}
+                  placeholder="0"
+                />
+              </span>
+            </div>
+            <div className="summary-grand" aria-live="polite">
+              <span>Total Tagihan</span>
+              <strong>{formatCurrency(grandTotal)}</strong>
+            </div>
+          </div>
+
+          {error && (
+            <div style={{ padding: "var(--space-3) var(--space-5) 0" }}>
+              <Alert tone="error">{error}</Alert>
+            </div>
+          )}
           {pendingReceipt && (
-            <div style={{ marginTop: "var(--space-2)" }}>
+            <div style={{ padding: "var(--space-3) var(--space-5) 0" }}>
               <Alert tone="error">
                 Draft {pendingReceipt} tersimpan.{" "}
-                <button type="button" className="link-button" onClick={() => void retryPending()} disabled={submitting}>
+                <button
+                  type="button"
+                  className="link-button"
+                  onClick={() => void retryPending()}
+                  disabled={submitting}
+                >
                   Coba bayar lagi
                 </button>
               </Alert>
             </div>
           )}
 
-          <div className="pos-cart__payment" style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)", marginTop: "var(--space-3)" }}>
+          <div className="cart__payment">
             <label className="field">
               <span>Lokasi <em>*</em></span>
-              <select
-                value={locationCode}
-                onChange={(e) => setLocationCode(e.target.value)}
-                required
-              >
+              <select value={locationCode} onChange={(e) => setLocationCode(e.target.value)} required>
                 <option value="" disabled>Pilih Lokasi</option>
-                {locations.map((loc) => {
-                  const code = loc.code ?? loc.public_code ?? "";
-                  return <option key={code} value={code}>{loc.name}</option>;
-                })}
+                {locations.map((loc) => (
+                  <option key={loc.code ?? loc.public_code} value={loc.code ?? loc.public_code}>{loc.name}</option>
+                ))}
               </select>
             </label>
 
             <label className="field">
               <span>Pelanggan</span>
-              <select
-                value={customerCode}
-                onChange={(e) => setCustomerCode(e.target.value)}
-              >
+              <select value={customerCode} onChange={(e) => setCustomerCode(e.target.value)}>
                 <option value="">Pelanggan Umum (Opsional)</option>
-                {contacts.map((c) => {
-                  const code = c.code ?? c.public_code ?? "";
-                  return <option key={code} value={code}>{c.name}</option>;
-                })}
+                {contacts.map((c) => (
+                  <option key={c.code ?? c.public_code} value={c.code ?? c.public_code}>{c.name}</option>
+                ))}
               </select>
             </label>
 
             <label className="field">
               <span>Kas <em>*</em></span>
-              <select
-                value={cashAccountCode}
-                onChange={(e) => setCashAccountCode(e.target.value)}
-                required
-              >
+              <select value={cashAccountCode} onChange={(e) => setCashAccountCode(e.target.value)} required>
                 <option value="" disabled>Pilih Akun Kas</option>
-                {cashAccounts.map((ca) => {
-                  const code = ca.code ?? ca.public_code ?? "";
-                  return <option key={code} value={code}>{ca.name}</option>;
-                })}
+                {cashAccounts.map((ca) => (
+                  <option key={ca.code ?? ca.public_code} value={ca.code ?? ca.public_code}>{ca.name}</option>
+                ))}
               </select>
             </label>
+          </div>
 
-            <div style={{ display: "flex", justifyContent: "space-between", color: "var(--text-muted)", fontSize: "var(--text-xs)", marginTop: "var(--space-2)" }}>
+          <div className="cart__foot">
+            <div className="cart__foot-note">
               <span>{totalItemCount} item</span>
               <span><kbd>F4</kbd> bayar</span>
             </div>
-
             <button
               type="button"
               className="button button--primary button--full button--tall"
@@ -474,6 +489,6 @@ export function CashierPage({
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
