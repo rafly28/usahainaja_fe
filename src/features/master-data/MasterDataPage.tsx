@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
-import { Alert, Spinner } from "../../components/Feedback";
+import { Alert, EmptyState, Spinner } from "../../components/Feedback";
 import { api, errorMessage } from "../../lib/api";
 import type { BusinessMember, Category, Location, Party, Unit, UnitConversion } from "../../types";
 
@@ -321,9 +321,27 @@ function DataPanel({ title, description, children, list }: { title: string; desc
   return <div className="master-data-grid"><section className="content-card master-data-form"><header className="content-card__header"><div><h2>Tambah {title.toLowerCase()}</h2><p>{description}</p></div></header><div className="master-data-form__body">{children}</div></section><section className="content-card master-data-list"><header className="content-card__header"><div><h2>Daftar {title.toLowerCase()}</h2><p>Data terpisah untuk setiap usaha aktif.</p></div></header>{list}</section></div>;
 }
 
-function ListState({ loading, empty, children }: { loading: boolean; empty: boolean; children: ReactNode }) {
+function ListState({
+  loading,
+  empty,
+  title = "Belum ada data",
+  description = "Tambahkan data pertama Anda dari formulir di sebelah kiri.",
+  children,
+}: {
+  loading: boolean;
+  empty: boolean;
+  title?: string;
+  description?: string;
+  children: ReactNode;
+}) {
   if (loading) return <div className="master-data-list__state"><Spinner label="Memuat data" /></div>;
-  if (empty) return <div className="master-data-list__state">Belum ada data. Tambahkan data pertama Anda dari formulir di sebelah kiri.</div>;
+  if (empty) {
+    return (
+      <div style={{ padding: "var(--space-5)" }}>
+        <EmptyState title={title} description={description} />
+      </div>
+    );
+  }
   return <div className="master-data-list__items">{children}</div>;
 }
 
@@ -362,7 +380,15 @@ function RoleSelect({ value, onChange, actorRole, disabled = false }: { value: s
   return <select aria-label="Role anggota" disabled={disabled} value={value} onChange={(event) => onChange(event.target.value)}>{actorRole === "OWNER" && <option value="OWNER">Owner</option>}<option value="ADMIN">Admin</option><option value="CASHIER">Kasir</option><option value="STAFF">Staf</option><option value="VIEWER">Viewer</option></select>;
 }
 
-function Status({ value }: { value: string }) { return <span className={`status-pill ${value === "ACTIVE" ? "status-pill--active" : ""}`}>{value === "ACTIVE" ? "Aktif" : "Nonaktif"}</span>; }
+function Status({ value }: { value: string }) {
+  const isActive = value === "ACTIVE";
+  return (
+    <span className={`status-pill ${isActive ? "status-pill--ok" : "status-pill--neutral"}`}>
+      <i aria-hidden="true" />
+      {isActive ? "Aktif" : "Nonaktif"}
+    </span>
+  );
+}
 function LifecycleButton<T extends { status: string }>({ item, disabled, onToggle }: { item: T; disabled: boolean; onToggle: (item: T) => Promise<void> }) { return <button className="link-button" disabled={disabled} onClick={() => void onToggle(item)} type="button">{item.status === "ACTIVE" ? "Nonaktifkan" : "Aktifkan"}</button>; }
 function translateCategory(value: string) { return ({ PRODUCT: "Produk", SERVICE: "Jasa", ASSET: "Aset", EXPENSE: "Biaya" } as Record<string, string>)[value] ?? value; }
 function translateUnit(value: string) { return ({ COUNT: "Hitungan", WEIGHT: "Berat", VOLUME: "Volume", TIME: "Waktu", OTHER: "Lainnya" } as Record<string, string>)[value] ?? value; }
