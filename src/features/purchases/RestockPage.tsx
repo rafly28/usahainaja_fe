@@ -1,13 +1,24 @@
 import { useEffect, useMemo, useState } from "react";
-import { Alert } from "../../components/Feedback";
+import { Alert, EmptyState, SkeletonRows } from "../../components/Feedback";
 import { Icon } from "../../components/Icons";
 import { api, errorMessage, ApiError } from "../../lib/api";
 import { formatCurrency } from "../../lib/format";
-import { getProductCode, type Product, type PurchaseItem, type Location, type Contact, type CashAccount } from "../../types";
+import { getProductCode, getProductUnit, type Product, type PurchaseItem, type Location, type Contact, type CashAccount } from "../../types";
 
 type RestockItem = PurchaseItem & {
   name: string;
+  unit?: string;
 };
+
+interface PurchaseDoc {
+  purchase_number: string;
+  purchase_date: string;
+  supplier_name?: string;
+  status: string;
+  payment_status?: string;
+  grand_total: string;
+  item_count?: number;
+}
 
 export function RestockPage({
   products,
@@ -18,6 +29,10 @@ export function RestockPage({
   onPurchaseCreated: (purchaseNumber: string) => void;
   onGoToProducts: () => void;
 }) {
+  const [purchases, setPurchases] = useState<PurchaseDoc[]>([]);
+  const [loadingPurchases, setLoadingPurchases] = useState(true);
+  const [purchaseSearch, setPurchaseSearch] = useState("");
+
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<RestockItem[]>([]);
   const [discountTotal, setDiscountTotal] = useState<number>(0);
@@ -41,25 +56,30 @@ export function RestockPage({
   useEffect(() => {
     async function loadData() {
       try {
-        const [locRes, conRes, cashRes] = await Promise.all([
+        setLoadingPurchases(true);
+        const [locRes, conRes, cashRes, purchaseRes] = await Promise.all([
           api.locations.list(),
           api.contacts.list(),
           api.cashAccounts.list(),
+          api.purchases.list().catch(() => []),
         ]);
         setLocations(locRes || []);
-        setContacts((conRes || []).filter(c => c.contact_type === 'SUPPLIER' || c.contact_type === 'BOTH'));
+        setContacts((conRes || []).filter(c => c.contact_type === "SUPPLIER" || c.contact_type === "BOTH"));
         setCashAccounts(cashRes || []);
+        setPurchases((purchaseRes as PurchaseDoc[]) || []);
         
         if (locRes && locRes.length > 0) setLocationCode(locRes[0]?.code ?? locRes[0]?.public_code ?? "");
         if (cashRes && cashRes.length > 0) setCashAccountCode(cashRes[0]?.code ?? cashRes[0]?.public_code ?? "");
       } catch (err) {
         console.error("Failed to load data", err);
+      } finally {
+        setLoadingPurchases(false);
       }
     }
     void loadData();
   }, []);
 
-  const filtered = useMemo(() => {
+  const filteredProducts = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("id");
     return products.filter(
       (product) =>
@@ -69,6 +89,16 @@ export function RestockPage({
           .includes(term),
     );
   }, [products, search]);
+
+  const filteredPurchases = useMemo(() => {
+    const term = purchaseSearch.trim().toLowerCase();
+    if (!term) return purchases;
+    return purchases.filter(
+      (p) =>
+        p.purchase_number.toLowerCase().includes(term) ||
+        (p.supplier_name && p.supplier_name.toLowerCase().includes(term)),
+    );
+  }, [purchases, purchaseSearch]);
 
   const subtotal = cart.reduce(
     (sum, item) => sum + Number(item.quantity) * Number(item.unit_price) - Number(item.discount),
@@ -90,6 +120,7 @@ export function RestockPage({
         {
           product_code: code,
           name: product.name,
+          unit: getProductUnit(product),
           quantity: 1,
           unit_price: Number(product.default_purchase_price || 0),
           discount: 0,
@@ -156,9 +187,8 @@ export function RestockPage({
           line_number: it.line_number ?? idx + 1,
           received_quantity: it.quantity,
         }));
-        // Fallback when the create response carries no lines.
         if (lines.length === 0) {
-          const detail = await api.purchases.get(purchaseNumber).catch(() => null) as unknown as {
+          const detail = (await api.purchases.get(purchaseNumber).catch(() => null)) as unknown as {
             items?: { line_number: number; quantity: string }[];
           } | null;
           lines = (detail?.items ?? []).map((it, idx) => ({
@@ -167,9 +197,10 @@ export function RestockPage({
           }));
         }
       }
+
       if (action === "receive" || action === "pay") {
         if (lines.length === 0) {
-          const detail = await api.purchases.get(purchaseNumber).catch(() => null) as unknown as {
+          const detail = (await api.purchases.get(purchaseNumber).catch(() => null)) as unknown as {
             items?: { line_number: number; quantity: string }[];
           } | null;
           lines = (detail?.items ?? []).map((it, idx) => ({
@@ -178,8 +209,6 @@ export function RestockPage({
           }));
         }
         await api.purchases.order(purchaseNumber).catch((err: unknown) => {
-          // Already ordered/received (e.g. retry after a partial failure):
-          // continue to receive instead of aborting.
           if (err instanceof ApiError && err.code === "INVALID_STATE") return;
           throw err;
         });
@@ -188,6 +217,7 @@ export function RestockPage({
           items: lines,
         });
       }
+
       if (action === "pay") {
         await api.purchases.pay(purchaseNumber, {
           amount: grandTotal,
@@ -202,233 +232,375 @@ export function RestockPage({
       setTaxTotal(0);
       setReferenceNumber("");
     } catch (caught) {
-      setError(purchaseNumber ? `${errorMessage(caught)} (Draft ${purchaseNumber} tersimpan, jangan buat duplikat.)` : errorMessage(caught));
+      setError(
+        purchaseNumber
+          ? `${errorMessage(caught)} (Draft ${purchaseNumber} tersimpan, jangan buat duplikat.)`
+          : errorMessage(caught),
+      );
     } finally {
       setSubmitting(false);
     }
   }
 
+  function getStatusBadge(status: string) {
+    const s = status.toUpperCase();
+    if (s === "RECEIVED" || s === "COMPLETED" || s === "PAID") {
+      return <span className="status-pill status-pill--ok"><i />Diterima</span>;
+    }
+    if (s === "PARTIAL") {
+      return <span className="status-pill status-pill--warn"><i />Sebagian</span>;
+    }
+    return <span className="status-pill status-pill--neutral"><i />Draf</span>;
+  }
+
   return (
-    <div className="pos-layout pos-layout--restock">
-      <div className="pos-products">
-        <div className="page-heading">
-          <div>
-            <p className="eyebrow">INVENTORI</p>
-            <h1>Pembelian (Restock)</h1>
-          </div>
-        </div>
-
-        <div className="pos-search">
-          <Icon name="search" size={20} />
-          <input
-            autoFocus
-            placeholder="Cari nama, SKU, atau pindai barcode..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-
-        <div className="pos-grid">
-          {filtered.map((product) => {
-            const code = getProductCode(product);
-            const inCart = cart.find((item) => item.product_code === code);
-            const stockQty = Number(product.quantity ?? product.stock ?? 0);
-
-            return (
-              <button
-                key={code}
-                className={`pos-item-card ${inCart ? "is-in-cart" : ""}`}
-                onClick={() => addToCart(product)}
-                type="button"
-              >
-                <div className="pos-item-card__header">
-                  <div className="pos-item-card__abbr">
-                    {product.name.slice(0, 1).toUpperCase()}
-                  </div>
-                  {inCart && (
-                    <span className="pos-item-card__cart-badge">
-                      {inCart.quantity} item
-                    </span>
-                  )}
-                </div>
-                <div className="pos-item-card__info">
-                  <strong title={product.name}>{product.name}</strong>
-                  {product.category_name && (
-                    <span className="pos-item-card__category">{product.category_name}</span>
-                  )}
-                  <div className="pos-item-card__price-row">
-                    <p className="pos-item-card__price">
-                      {formatCurrency(product.default_purchase_price)}
-                    </p>
-                    <span className="stock-pill stock-pill--muted">
-                      Stok saat ini: {stockQty}
-                    </span>
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-          {filtered.length === 0 && (
-            <div className="pos-empty-search">
-              Produk tidak ditemukan.
-              <button type="button" className="link-button" onClick={onGoToProducts}>
-                Tambah produk baru
-              </button>
-            </div>
-          )}
+    <div className="content-stack">
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow">PEMBELIAN</p>
+          <h1>Pembelian</h1>
+          <p className="muted">Catat restock dan terima barang dari supplier.</p>
         </div>
       </div>
 
-      <div className="pos-cart">
-        <div className="pos-cart__header">
-          <h2>Daftar Restock</h2>
-          <button className="link-button" onClick={() => setCart([])}>Kosongkan</button>
-        </div>
-        
-        <div className="pos-cart__meta p-4 border-b border-gray-100">
-           <input
-            className="input-field w-full"
-            placeholder="No. Referensi / Surat Jalan (opsional)"
-            value={referenceNumber}
-            onChange={(e) => setReferenceNumber(e.target.value)}
-          />
+      {/* 1. DAFTAR PEMBELIAN SEKSI */}
+      <section className="content-card">
+        <div className="content-card__header">
+          <div>
+            <h2>Daftar pembelian</h2>
+            <p>
+              {purchases.length} dokumen pembelian terdaftar.
+            </p>
+          </div>
+          <div className="search-field" style={{ width: "240px" }}>
+            <Icon name="search" size={16} />
+            <input
+              placeholder="Cari nomor atau supplier"
+              value={purchaseSearch}
+              onChange={(e) => setPurchaseSearch(e.target.value)}
+            />
+          </div>
         </div>
 
-        <div className="pos-cart__items">
-          {cart.length === 0 ? (
-            <div className="pos-cart__empty">
-              <Icon name="box" size={48} />
-              <p>Belum ada produk yang akan direstock</p>
-            </div>
-          ) : (
-            cart.map((item) => (
-              <div key={item.product_code} className="cart-item cart-item--editable">
-                <div className="cart-item__details">
-                  <strong>{item.name}</strong>
-                  <div className="flex gap-2 items-center mt-1">
-                    <span className="text-sm text-gray-500">Harga:</span>
-                    <input 
-                      type="number"
-                      className="summary-input"
-                      value={item.unit_price || ""}
-                      onChange={(e) => updatePrice(item.product_code, Number(e.target.value))}
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th scope="col">Nomor</th>
+                <th scope="col">Supplier</th>
+                <th scope="col">Tanggal</th>
+                <th scope="col" className="num">Total</th>
+                <th scope="col">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loadingPurchases ? (
+                <SkeletonRows columns={5} rows={3} />
+              ) : filteredPurchases.length === 0 ? (
+                <tr>
+                  <td colSpan={5} style={{ padding: 0 }}>
+                    <EmptyState
+                      title="Belum ada dokumen pembelian"
+                      description="Pilih produk pada formulir di bawah untuk membuat draf restock baru."
                     />
-                  </div>
-                </div>
-                <div className="cart-item__actions">
-                  <button onClick={() => updateQuantity(item.product_code, Number(item.quantity) - 1)}>
-                    -
-                  </button>
-                  <input
-                    type="number"
-                    value={item.quantity || ""}
-                    onChange={(e) => updateQuantity(item.product_code, Number(e.target.value))}
-                    style={{ width: "40px", textAlign: "center" }}
-                  />
-                  <button onClick={() => updateQuantity(item.product_code, Number(item.quantity) + 1)}>
-                    +
-                  </button>
-                </div>
-                <div className="cart-item__total">
-                  {formatCurrency(Number(item.quantity) * Number(item.unit_price))}
-                </div>
-              </div>
-            ))
-          )}
+                  </td>
+                </tr>
+              ) : (
+                filteredPurchases.slice(0, 5).map((p) => (
+                  <tr key={p.purchase_number}>
+                    <td className="doc-no"><strong>{p.purchase_number}</strong></td>
+                    <td>{p.supplier_name || "Tanpa supplier"}</td>
+                    <td>{p.purchase_date ? new Date(p.purchase_date).toLocaleDateString("id-ID") : "-"}</td>
+                    <td className="num">{formatCurrency(p.grand_total)}</td>
+                    <td>{getStatusBadge(p.status)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
+        {filteredPurchases.length > 0 && (
+          <div className="table-footer">
+            <span>Menampilkan {Math.min(5, filteredPurchases.length)} dari {filteredPurchases.length} dokumen.</span>
+          </div>
+        )}
+      </section>
 
-        <div className="pos-cart__summary">
-          <div className="summary-row">
-            <span>Subtotal</span>
-            <span>{formatCurrency(subtotal)}</span>
-          </div>
-          <div className="summary-row text-success">
-            <span>Diskon Total</span>
-            <input
-              type="number"
-              className="summary-input"
-              value={discountTotal || ""}
-              onChange={(e) => setDiscountTotal(Number(e.target.value))}
-              placeholder="0"
-            />
-          </div>
-          <div className="summary-row">
-            <span>Pajak (Tax)</span>
-            <input
-              type="number"
-              className="summary-input"
-              value={taxTotal || ""}
-              onChange={(e) => setTaxTotal(Number(e.target.value))}
-              placeholder="0"
-            />
-          </div>
-          <div className="summary-row summary-grand">
-            <span>Total Pembayaran</span>
-            <span>{formatCurrency(grandTotal)}</span>
+      {/* 2. FORM RESTOCK DUA ZONA (SPLIT) */}
+      <div className="split" style={{ marginTop: "var(--space-5)" }}>
+        {/* CARD KIRI: ITEM PEMBELIAN */}
+        <section className="content-card">
+          <div className="content-card__header">
+            <div>
+              <h2>Item pembelian</h2>
+              <p>Pilih produk yang akan dipesan atau direstock</p>
+            </div>
           </div>
 
-          {error && <div className="mt-2"><Alert tone="error">{error}</Alert></div>}
+          <div style={{ padding: "var(--space-5)" }}>
+            <div className="pos-search" style={{ marginBottom: "var(--space-4)" }}>
+              <Icon name="search" size={18} />
+              <input
+                placeholder="Cari nama, SKU, atau kode produk..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
 
-          <div className="pos-cart__payment" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            <select
-              value={locationCode}
-              onChange={(e) => setLocationCode(e.target.value)}
-              className="payment-select"
-            >
-              <option value="" disabled>Pilih Lokasi Penerimaan</option>
-              {locations.map((loc) => {
-                const code = loc.code ?? loc.public_code ?? "";
-                return <option key={code} value={code}>{loc.name}</option>;
-              })}
-            </select>
-            <select
-              value={supplierCode}
-              onChange={(e) => setSupplierCode(e.target.value)}
-              className="payment-select"
-            >
-              <option value="">Pemasok Umum (Opsional)</option>
-              {contacts.map((c) => {
-                const code = c.code ?? c.public_code ?? "";
-                return <option key={code} value={code}>{c.name}</option>;
-              })}
-            </select>
-            <select
-              value={cashAccountCode}
-              onChange={(e) => setCashAccountCode(e.target.value)}
-              className="payment-select"
-            >
-              <option value="" disabled>Pilih Akun Kas (Jika Langsung Bayar)</option>
-              {cashAccounts.map((ca) => {
-                const code = ca.code ?? ca.public_code ?? "";
-                return <option key={code} value={code}>{ca.name}</option>;
-              })}
-            </select>
-            
-            <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
+            {search && filteredProducts.length > 0 && (
+              <div
+                style={{
+                  maxHeight: "160px",
+                  overflowY: "auto",
+                  border: "1px solid var(--line)",
+                  borderRadius: "var(--radius-md)",
+                  background: "var(--surface-raised)",
+                  marginBottom: "var(--space-4)",
+                }}
+              >
+                {filteredProducts.slice(0, 6).map((product) => {
+                  const code = getProductCode(product);
+                  return (
+                    <button
+                      key={code}
+                      type="button"
+                      onClick={() => addToCart(product)}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        width: "100%",
+                        padding: "8px 12px",
+                        border: "0",
+                        borderBottom: "1px solid var(--line-soft)",
+                        background: "transparent",
+                        cursor: "pointer",
+                        textAlign: "left",
+                        font: "inherit",
+                        fontSize: "var(--text-sm)",
+                      }}
+                    >
+                      <span>
+                        <strong>{product.name}</strong>
+                        {product.sku && <small style={{ marginLeft: "6px", color: "var(--text-muted)" }}>{product.sku}</small>}
+                      </span>
+                      <span className="num" style={{ fontWeight: 600 }}>
+                        {formatCurrency(product.default_purchase_price)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {filteredProducts.length === 0 && search && (
+              <div style={{ marginBottom: "var(--space-4)", fontSize: "var(--text-xs)", color: "var(--text-muted)" }}>
+                Produk tidak ditemukan.{" "}
+                <button type="button" className="link-button" onClick={onGoToProducts}>
+                  Tambah produk baru
+                </button>
+              </div>
+            )}
+
+            <div className="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Produk</th>
+                    <th scope="col" className="num">Jumlah</th>
+                    <th scope="col" className="num">Harga Beli</th>
+                    <th scope="col" className="num">Subtotal</th>
+                    <th scope="col" className="actions">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cart.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} style={{ textAlign: "center", color: "var(--text-muted)", padding: "var(--space-6)" }}>
+                        Belum ada item ditambahkan. Cari produk di atas untuk menambahkan.
+                      </td>
+                    </tr>
+                  ) : (
+                    cart.map((item) => (
+                      <tr key={item.product_code}>
+                        <td>
+                          <strong>{item.name}</strong>
+                          <span className="unit">{item.unit ?? "PCS"}</span>
+                        </td>
+                        <td className="num">
+                          <input
+                            type="number"
+                            min="1"
+                            value={item.quantity || ""}
+                            onChange={(e) => updateQuantity(item.product_code, Number(e.target.value))}
+                            className="summary-input"
+                            style={{ width: "60px" }}
+                          />
+                        </td>
+                        <td className="num">
+                          <input
+                            type="number"
+                            value={item.unit_price || ""}
+                            onChange={(e) => updatePrice(item.product_code, Number(e.target.value))}
+                            className="summary-input"
+                            style={{ width: "100px" }}
+                          />
+                        </td>
+                        <td className="num">
+                          {formatCurrency(Number(item.quantity) * Number(item.unit_price))}
+                        </td>
+                        <td className="actions">
+                          <button
+                            type="button"
+                            className="link-button"
+                            style={{ color: "var(--status-danger-text)" }}
+                            onClick={() => updateQuantity(item.product_code, 0)}
+                          >
+                            Hapus
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {error && (
+              <div style={{ marginTop: "var(--space-4)" }}>
+                <Alert tone="error">{error}</Alert>
+              </div>
+            )}
+
+            <div className="form-actions">
               <button
-                className="button button--secondary button--block"
+                type="button"
+                className="button button--secondary"
                 onClick={() => void submitAction("draft")}
                 disabled={submitting || cart.length === 0}
               >
-                Simpan Draft
+                Simpan draf
               </button>
               <button
-                className="button button--secondary button--block"
+                type="button"
+                className="button button--primary"
                 onClick={() => void submitAction("receive")}
                 disabled={submitting || cart.length === 0}
               >
-                Terima Barang
+                Terima barang
               </button>
+              {cashAccountCode && (
+                <button
+                  type="button"
+                  className="button button--ghost"
+                  onClick={() => void submitAction("pay")}
+                  disabled={submitting || cart.length === 0}
+                >
+                  Terima & Bayar
+                </button>
+              )}
             </div>
-            <button
-              className="button button--primary button--large button--block mt-2"
-              onClick={() => void submitAction("pay")}
-              disabled={submitting || cart.length === 0}
-            >
-              {submitting ? "Memproses..." : "Terima & Bayar"}
-            </button>
           </div>
-        </div>
+        </section>
+
+        {/* CARD KANAN: RINGKASAN BIAYA */}
+        <section className="content-card">
+          <div className="content-card__header">
+            <div>
+              <h2>Ringkasan biaya</h2>
+              <p>Total dan tujuan pengiriman restock</p>
+            </div>
+          </div>
+
+          <div style={{ padding: "var(--space-5)" }}>
+            <div className="summary-row">
+              <span>Subtotal item</span>
+              <span className="num">{formatCurrency(subtotal)}</span>
+            </div>
+            <div className="summary-row">
+              <span>Biaya tambahan / Pajak</span>
+              <input
+                type="number"
+                className="summary-input"
+                value={taxTotal || ""}
+                onChange={(e) => setTaxTotal(Number(e.target.value))}
+                placeholder="0"
+              />
+            </div>
+            <div className="summary-row">
+              <span>Diskon supplier</span>
+              <input
+                type="number"
+                className="summary-input"
+                value={discountTotal || ""}
+                onChange={(e) => setDiscountTotal(Number(e.target.value))}
+                placeholder="0"
+              />
+            </div>
+            <div className="summary-grand" aria-live="polite">
+              <span>Total pembelian</span>
+              <strong className="num">{formatCurrency(grandTotal)}</strong>
+            </div>
+
+            <div className="form-stack" style={{ gap: "var(--space-3)", marginTop: "var(--space-4)" }}>
+              <label className="field">
+                <span>Lokasi penerimaan <em>*</em></span>
+                <select
+                  value={locationCode}
+                  onChange={(e) => setLocationCode(e.target.value)}
+                  required
+                >
+                  <option value="" disabled>Pilih Lokasi Penerimaan</option>
+                  {locations.map((loc) => {
+                    const code = loc.code ?? loc.public_code ?? "";
+                    return <option key={code} value={code}>{loc.name}</option>;
+                  })}
+                </select>
+              </label>
+
+              <label className="field">
+                <span>Supplier</span>
+                <select
+                  value={supplierCode}
+                  onChange={(e) => setSupplierCode(e.target.value)}
+                >
+                  <option value="">Tanpa supplier (Pemasok umum)</option>
+                  {contacts.map((c) => {
+                    const code = c.code ?? c.public_code ?? "";
+                    return <option key={code} value={code}>{c.name}</option>;
+                  })}
+                </select>
+              </label>
+
+              <label className="field">
+                <span>No. Referensi / Surat Jalan</span>
+                <input
+                  placeholder="Contoh: SJ-2026-081 (opsional)"
+                  value={referenceNumber}
+                  onChange={(e) => setReferenceNumber(e.target.value)}
+                />
+              </label>
+
+              <label className="field">
+                <span>Akun kas pembayaran (opsional)</span>
+                <select
+                  value={cashAccountCode}
+                  onChange={(e) => setCashAccountCode(e.target.value)}
+                >
+                  <option value="">Bayar nanti (Tempo / Hutang)</option>
+                  {cashAccounts.map((ca) => {
+                    const code = ca.code ?? ca.public_code ?? "";
+                    return <option key={code} value={code}>{ca.name}</option>;
+                  })}
+                </select>
+              </label>
+            </div>
+
+            <p className="document-footnote" style={{ marginTop: "var(--space-4)", color: "var(--text-faint)", fontSize: "var(--text-xs)" }}>
+              Pembayaran dicatat setelah barang diterima, bukan bersamaan dengan penerimaan.
+            </p>
+          </div>
+        </section>
       </div>
     </div>
   );

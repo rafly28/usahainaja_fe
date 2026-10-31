@@ -62,15 +62,16 @@ export function SkeletonRows({
   columns: number;
 }) {
   return (
-    <div aria-busy="true">
-      <span className="sr-only">Memuat data</span>
+    <>
       {Array.from({ length: rows }).map((_, rIdx) => (
-        <div key={rIdx} className="skeleton-row">
+        <tr key={rIdx} className="skeleton-row" aria-busy="true">
           {Array.from({ length: columns }).map((_, cIdx) => (
-            <span key={cIdx} aria-hidden="true" />
+            <td key={cIdx} aria-hidden="true">
+              <span className="skeleton-cell" />
+            </td>
           ))}
-        </div>
+        </tr>
       ))}
-    </div>
+    </>
   );
 }

@@ -585,7 +585,8 @@ h2 {
   border-bottom: 1px solid var(--line-soft);
 }
 
-.skeleton-row > span {
+.skeleton-row > span,
+.skeleton-cell {
   display: block;
   height: 12px;
   border-radius: var(--radius-sm);
@@ -2008,15 +2009,22 @@ tbody tr:hover {
   background: currentColor;
 }
 
+.status-pill--ok,
 .status-pill--good,
 .status-pill--active {
   color: var(--status-ok-text);
   background: var(--status-ok-bg);
 }
 
+.status-pill--warn,
 .status-pill--warning {
   color: var(--status-warn-text);
   background: var(--status-warn-bg);
+}
+
+.status-pill--neutral {
+  color: var(--status-neutral-text);
+  background: var(--status-neutral-bg);
 }
 
 .status-pill--danger {
@@ -2095,6 +2103,98 @@ tbody tr:hover {
   color: var(--muted);
   font-size: 0.8rem;
   line-height: 1.55;
+}
+
+.split {
+  display: grid;
+  grid-template-columns: 0.95fr 1.05fr;
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.split--wide-left {
+  grid-template-columns: 1.15fr 0.85fr;
+}
+
+@media (max-width: 960px) {
+  .split,
+  .split--wide-left {
+    grid-template-columns: 1fr;
+  }
+}
+
+.form-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.form-grid-2 .is-span-2 {
+  grid-column: 1 / -1;
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--line);
+}
+
+.form-actions .button {
+  width: auto;
+}
+
+.readonly-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: var(--control-height-lg);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  color: var(--text-strong);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.readonly-box small {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-regular);
+}
+
+.counter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: var(--num-features);
+}
+
+td.doc-no {
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-variant-numeric: var(--num-features);
+}
+
+.table-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--line-soft);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-variant-numeric: var(--num-features);
 }
 
 .form-card {

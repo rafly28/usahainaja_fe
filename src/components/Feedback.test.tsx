@@ -22,8 +22,14 @@ describe("Feedback components", () => {
   });
 
   it("skeleton merender jumlah baris dan kolom", () => {
-    render(<SkeletonRows rows={4} columns={5} />);
+    render(
+      <table>
+        <tbody>
+          <SkeletonRows rows={4} columns={5} />
+        </tbody>
+      </table>
+    );
     expect(document.querySelectorAll(".skeleton-row")).toHaveLength(4);
-    expect(document.querySelectorAll(".skeleton-row > span")).toHaveLength(20);
+    expect(document.querySelectorAll(".skeleton-cell")).toHaveLength(20);
   });
 });
