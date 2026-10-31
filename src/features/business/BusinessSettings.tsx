@@ -105,7 +105,12 @@ export function BusinessSettings({
           <legend>Logo usaha</legend>
           <p>Logo dipakai pada struk dan dokumen cetak. Kalau dikosongkan, nama usaha yang ditampilkan.</p>
           <div className="logo-settings">
-            <StoreIdentity name={business.name} logoUrl={logoUrl} documentLabel="Pratinjau kop dokumen" />
+            <StoreIdentity
+              name={business.name}
+              logoUrl={logoUrl}
+              documentLabel="Pratinjau kop dokumen"
+              storeType={getBusinessProfile(business.business_type).label}
+            />
             <div className="logo-settings__controls">
               <label className="field">
                 <span>Alamat gambar (opsional)</span>

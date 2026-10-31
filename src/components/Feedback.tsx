@@ -21,10 +21,16 @@ export function LoadingPage({ label = "Menyiapkan ruang kerja..." }: { label?: s
   );
 }
 
-export function Alert({ tone = "error", children }: { tone?: "error" | "success"; children: ReactNode }) {
+export function Alert({
+  tone = "error",
+  children,
+}: {
+  tone?: "error" | "success" | "info";
+  children: ReactNode;
+}) {
   return (
     <div className={`alert alert--${tone}`} role={tone === "error" ? "alert" : "status"}>
-      <span aria-hidden="true">{tone === "error" ? "!" : "✓"}</span>
+      <span className="alert__mark" aria-hidden="true" />
       <div>{children}</div>
     </div>
   );
@@ -41,14 +47,30 @@ export function EmptyState({
 }) {
   return (
     <div className="empty-state">
-      <div className="empty-state__illustration" aria-hidden="true">
-        <span />
-        <span />
-        <span />
-      </div>
       <h3>{title}</h3>
       <p>{description}</p>
       {action}
+    </div>
+  );
+}
+
+export function SkeletonRows({
+  rows = 5,
+  columns,
+}: {
+  rows?: number;
+  columns: number;
+}) {
+  return (
+    <div aria-busy="true">
+      <span className="sr-only">Memuat data</span>
+      {Array.from({ length: rows }).map((_, rIdx) => (
+        <div key={rIdx} className="skeleton-row">
+          {Array.from({ length: columns }).map((_, cIdx) => (
+            <span key={cIdx} aria-hidden="true" />
+          ))}
+        </div>
+      ))}
     </div>
   );
 }

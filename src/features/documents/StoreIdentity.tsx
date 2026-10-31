@@ -4,17 +4,23 @@ import { useState } from "react";
  * Identitas toko pada dokumen cetak.
  *
  * Kalau toko sudah memasang logo, logo itu yang dipakai. Kalau belum, tampilkan
- * inisial nama toko. Nama toko selalu ikut ditampilkan karena penerima struk
- * butuh tahu dokumen ini berasal dari toko mana.
+ * inisial nama toko di badge aksen. Nama toko selalu ikut ditampilkan karena
+ * penerima struk butuh tahu dokumen ini berasal dari toko mana.
+ *
+ * Struktur mengikuti mockup design system (Layar 08): nama toko, lalu label
+ * sekunder. Label sekunder memrioritaskan tipe usaha; label jenis dokumen
+ * hanya dipakai bila tipe usaha tidak tersedia (mis. pratinjau pengaturan).
  */
 export function StoreIdentity({
   name,
   logoUrl,
-  documentLabel,
+  documentLabel = "",
+  storeType,
 }: {
   name: string;
   logoUrl?: string;
-  documentLabel: string;
+  documentLabel?: string;
+  storeType?: string;
 }) {
   const [failed, setFailed] = useState(false);
   const hasLogo = Boolean(logoUrl) && !failed;
@@ -34,8 +40,8 @@ export function StoreIdentity({
         </span>
       )}
       <div>
-        <h2 className="document-store">{name}</h2>
-        <p className="document-store__type">{documentLabel}</p>
+        <p className="document-store">{name}</p>
+        <p className="document-store__type">{storeType ?? documentLabel}</p>
       </div>
     </div>
   );
@@ -45,8 +51,8 @@ export function StoreIdentity({
  * Inisial nama toko untuk badge fallback: huruf pertama tiap kata, maksimal
  * tiga huruf agar tetap terbaca di kotak kecil.
  */
-function initials(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean);
+function initials(name: string = ""): string {
+  const words = (name || "").trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return "?";
   if (words.length === 1) return words[0]!.slice(0, 3).toUpperCase();
   return words

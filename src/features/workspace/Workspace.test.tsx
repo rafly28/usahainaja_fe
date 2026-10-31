@@ -76,4 +76,11 @@ describe("Workspace halaman dokumen", () => {
     expect(screen.queryByRole("heading", { name: "Pembelian" })).toBeNull();
     expect(screen.getByText("Toko Kopi Nusantara")).toBeTruthy();
   });
+
+  it("topbar menampilkan peran dan IDR, bukan zona waktu", async () => {
+    renderWorkspace();
+    expect(await screen.findByText("OWNER")).toBeTruthy();
+    expect(screen.getByText("IDR")).toBeTruthy();
+    expect(screen.queryByText("Asia/Jakarta · IDR")).toBeNull();
+  });
 });

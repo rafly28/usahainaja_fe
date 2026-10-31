@@ -38,3 +38,13 @@ export function isLowStock(
   const min = numeric(minimum);
   return min > 0 && numeric(quantity) <= min;
 }
+
+export function roundQuantity(value: string, unitSymbol: string): string {
+  const num = parseFloat(value);
+  if (Number.isNaN(num)) return value;
+  if (unitSymbol.toUpperCase() === "PCS") {
+    return Math.round(num).toString();
+  }
+  const rounded = Math.round(num * 10) / 10;
+  return rounded.toString();
+}

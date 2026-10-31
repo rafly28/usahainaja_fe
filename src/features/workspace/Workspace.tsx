@@ -232,8 +232,9 @@ export function Workspace({
             {switchingBusiness && <Spinner label="Mengganti usaha" />}
           </div>
           <div className="topbar__meta">
-            <span className="role-badge">{enrichedBusiness.role ?? activeBusiness.role ?? "Anggota"}</span>
-            <span className="today">Asia/Jakarta · IDR</span>
+            <span className="role-badge">{(enrichedBusiness.role ?? activeBusiness.role ?? "Anggota").toUpperCase()}</span>
+            <span className="topbar__divider" aria-hidden="true" />
+            <span className="topbar__currency">IDR</span>
           </div>
         </header>
         {switchError && <div className="top-error"><Alert>{switchError}</Alert></div>}
@@ -285,7 +286,14 @@ export function Workspace({
               }}
             />
           )}
-          {view === "opname" && <StockOpnamePage onGoBack={() => navigate("dashboard")} />}
+          {view === "opname" && (
+            <StockOpnamePage
+              businessName={enrichedBusiness.name}
+              businessType={getBusinessProfile(enrichedBusiness.business_type).label}
+              businessLogoUrl={enrichedBusiness.logo_url}
+              onGoBack={() => navigate("dashboard")}
+            />
+          )}
           {view === "documents" && !openDocument && (
             <DocumentsHub
               onOpenDocument={(document) => {
@@ -300,6 +308,7 @@ export function Workspace({
               documentNumber={openDocument.number}
               documentType={openDocument.type}
               businessName={enrichedBusiness.name}
+              businessType={getBusinessProfile(enrichedBusiness.business_type).label}
               businessLogoUrl={enrichedBusiness.logo_url}
               onGoBack={() => setOpenDocument(null)}
             />

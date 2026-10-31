@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { StoreIdentity } from "./StoreIdentity";
 import { Alert, Spinner } from "../../components/Feedback";
-import { formatDateTime, formatNumber } from "../../lib/format";
+import { formatDateTime, formatNumber, formatCurrency } from "../../lib/format";
 import { api, errorMessage } from "../../lib/api";
 
 type ReceiptItem = {
@@ -9,6 +9,7 @@ type ReceiptItem = {
   product_code: string;
   product_name: string;
   quantity: string;
+  received_quantity?: string;
   unit_price?: string;
   discount?: string;
   subtotal: string;
@@ -21,6 +22,11 @@ type Receipt = {
   status: string;
   payment_status?: string;
   location_code?: string;
+  customer_code?: string | null;
+  supplier_code?: string | null;
+  subtotal?: string;
+  discount_total?: string;
+  tax_total?: string;
   grand_total: string;
   paid_total?: string;
   outstanding_total?: string;
@@ -36,18 +42,23 @@ type Receipt = {
  * dibuka langsung dari struk atau riwayat dan disimpan sebagai PDF.
  *
  * Format cetak memakai dialog cetak browser ("Save as PDF") pada ukuran A4.
- * Tidak ada pustaka PDF tambahan supaya dependensi frontend tetap kecil.
+ * Struktur lembar mengikuti mockup design system (Layar 08): kop identitas
+ * toko, meta ringkas, tabel item dengan sel angka `.num`, blok totals berisi
+ * Subtotal/Diskon/Pajak/Total, lalu footnote.
  */
 export function ReceiptPage({
   documentNumber,
   documentType,
   businessName,
+  businessType,
   businessLogoUrl,
   onGoBack,
 }: {
   documentNumber: string;
   documentType: "sale" | "purchase";
   businessName: string;
+  /** Label tipe usaha untuk kop dokumen, contoh "Toko / Retail". */
+  businessType?: string;
   businessLogoUrl?: string;
   onGoBack: () => void;
 }) {
@@ -78,7 +89,8 @@ export function ReceiptPage({
     };
   }, [documentNumber, documentType]);
 
-  const documentLabel = documentType === "sale" ? "Struk Penjualan" : "Konfirmasi Pembelian";
+  const isSale = documentType === "sale";
+  const documentLabel = isSale ? "Struk Penjualan" : "Konfirmasi Pembelian";
   const publicNumber = receipt ? receipt.receipt_number ?? receipt.purchase_number : documentNumber;
 
   return (
@@ -113,7 +125,12 @@ export function ReceiptPage({
       ) : receipt ? (
         <div className="content-card document-sheet">
           <header className="document-head">
-            <StoreIdentity name={businessName} logoUrl={businessLogoUrl} documentLabel={documentLabel} />
+            <StoreIdentity
+              name={businessName}
+              logoUrl={businessLogoUrl}
+              documentLabel={documentLabel}
+              storeType={businessType}
+            />
             <div>
               <span className="document-head__label">Nomor dokumen</span>
               <p className="document-head__value">{publicNumber}</p>
@@ -122,17 +139,30 @@ export function ReceiptPage({
 
           <div className="document-meta">
             <div className="document-meta__item">
-              <span>Waktu</span>
+              <span>Jenis</span>
+              <p>{documentLabel}</p>
+            </div>
+            <div className="document-meta__item">
+              <span>Tanggal</span>
               <p>{formatDateTime(receipt.sale_date ?? receipt.purchase_date ?? "")}</p>
             </div>
-            <div className="document-meta__item">
-              <span>Status</span>
-              <p>{receipt.status}</p>
-            </div>
-            <div className="document-meta__item">
-              <span>Status pembayaran</span>
-              <p>{receipt.payment_status ?? "-"}</p>
-            </div>
+            {isSale ? (
+              <div className="document-meta__item">
+                <span>Pelanggan</span>
+                <p>{receipt.customer_code ?? "Umum"}</p>
+              </div>
+            ) : (
+              <div className="document-meta__item">
+                <span>Supplier</span>
+                <p>{receipt.supplier_code ?? "Tanpa supplier"}</p>
+              </div>
+            )}
+            {receipt.payment_status && (
+              <div className="document-meta__item">
+                <span>Status pembayaran</span>
+                <p>{receipt.payment_status}</p>
+              </div>
+            )}
             {receipt.location_code && (
               <div className="document-meta__item">
                 <span>Lokasi</span>
@@ -151,10 +181,10 @@ export function ReceiptPage({
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Produk</th>
-                  <th className="text-right">Kuantitas</th>
-                  <th className="text-right">Harga</th>
-                  <th className="text-right">Subtotal</th>
+                  <th scope="col">Produk</th>
+                  <th scope="col" className="num">Qty</th>
+                  <th scope="col" className="num">Harga</th>
+                  <th scope="col" className="num">Jumlah</th>
                 </tr>
               </thead>
               <tbody>
@@ -164,9 +194,9 @@ export function ReceiptPage({
                       <div className="font-medium">{item.product_name}</div>
                       <div className="text-xs muted">{item.product_code}</div>
                     </td>
-                    <td className="text-right">{formatNumber(item.quantity)}</td>
-                    <td className="text-right">{formatNumber(item.unit_price ?? 0)}</td>
-                    <td className="text-right">{formatNumber(item.subtotal)}</td>
+                    <td className="num">{formatNumber(item.received_quantity ?? item.quantity)}</td>
+                    <td className="num">{formatCurrency(item.unit_price ?? 0)}</td>
+                    <td className="num">{formatCurrency(item.subtotal)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -174,20 +204,32 @@ export function ReceiptPage({
           </div>
 
           <div className="document-totals">
+            <div className="document-totals__row">
+              <span>Subtotal</span>
+              <span>{formatCurrency(receipt.subtotal ?? 0)}</span>
+            </div>
+            <div className="document-totals__row">
+              <span>Diskon</span>
+              <span>{formatCurrency(receipt.discount_total ?? 0)}</span>
+            </div>
+            <div className="document-totals__row">
+              <span>Pajak</span>
+              <span>{formatCurrency(receipt.tax_total ?? 0)}</span>
+            </div>
             <div className="document-totals__row document-totals__row--grand">
               <span>Total</span>
-              <strong>{formatNumber(receipt.grand_total)}</strong>
+              <strong>{formatCurrency(receipt.grand_total)}</strong>
             </div>
             {receipt.paid_total && (
               <div className="document-totals__row">
                 <span>Sudah dibayar</span>
-                <strong>{formatNumber(receipt.paid_total)}</strong>
+                <strong>{formatCurrency(receipt.paid_total)}</strong>
               </div>
             )}
             {receipt.outstanding_total && (
               <div className="document-totals__row">
                 <span>Sisa tagihan</span>
-                <strong className="color-danger">{formatNumber(receipt.outstanding_total)}</strong>
+                <strong className="color-danger">{formatCurrency(receipt.outstanding_total)}</strong>
               </div>
             )}
           </div>
@@ -206,8 +248,10 @@ export function ReceiptPage({
           )}
 
           <p className="document-footnote">
-            Dokumen ini bukan invoice pajak. Nomor dokumen dapat dipakai untuk melacak transaksi pada
-            riwayat pergerakan stok dan pembayaran.
+            Dokumen dihasilkan dari UsahainAja.{" "}
+            {isSale
+              ? "Nilai pada struk ini sama dengan total pada transaksi kasir."
+              : "Nilai pada dokumen ini sama dengan total pada transaksi pembelian."}
           </p>
         </div>
       ) : null}

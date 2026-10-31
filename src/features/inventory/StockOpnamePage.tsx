@@ -6,13 +6,25 @@ import { api, errorMessage } from "../../lib/api";
 import { getProductCode, type InventoryItem, type StockAdjustment } from "../../types";
 import { StockAdjustmentDetail } from "./StockAdjustmentDetail";
 
+import { OpnameSheet, type OpnameSheetItem } from "./OpnameSheet";
+
 type CountLine = { product_code: string; counted: string };
 
 /**
  * Stok opname: pengguna memasukkan hasil hitung fisik, server yang menghitung
  * selisih terhadap stok sistem sehingga angka tidak dipercaya dari browser.
  */
-export function StockOpnamePage({ onGoBack }: { onGoBack: () => void }) {
+export function StockOpnamePage({
+  onGoBack,
+  businessName,
+  businessType,
+  businessLogoUrl,
+}: {
+  onGoBack: () => void;
+  businessName?: string;
+  businessType?: string;
+  businessLogoUrl?: string;
+}) {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [locations, setLocations] = useState<{ code: string; name: string; is_default?: boolean }[]>([]);
   const [locationCode, setLocationCode] = useState("");
@@ -22,6 +34,11 @@ export function StockOpnamePage({ onGoBack }: { onGoBack: () => void }) {
 
   const [history, setHistory] = useState<StockAdjustment[]>([]);
   const [selected, setSelected] = useState("");
+  const [printData, setPrintData] = useState<{
+    opname: StockAdjustment;
+    items: OpnameSheetItem[];
+  } | null>(null);
+  const [printingNumber, setPrintingNumber] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [completing, setCompleting] = useState("");
@@ -135,8 +152,51 @@ export function StockOpnamePage({ onGoBack }: { onGoBack: () => void }) {
     }
   }
 
+  async function handlePrint(opnameNumber: string) {
+    setPrintingNumber(opnameNumber);
+    setError("");
+    try {
+      const data = await api.inventory.opname(opnameNumber);
+      const mappedItems: OpnameSheetItem[] = (data.items ?? []).map((item) => ({
+        productCode: item.product_code,
+        productName: item.product_name,
+        unitSymbol: item.unit_symbol,
+        systemQuantity: item.system_quantity ?? "0",
+        countedQuantity: item.counted_quantity ?? "0",
+        differenceQuantity: item.quantity ?? "0",
+        note: item.direction === "IN" ? "Bertambah" : (item.direction === "OUT" ? "Berkurang" : undefined),
+      }));
+      setPrintData({
+        opname: data,
+        items: mappedItems,
+      });
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setPrintingNumber("");
+    }
+  }
+
   function setCount(productCode: string, value: string) {
     setCounts((current) => ({ ...current, [productCode]: value }));
+  }
+
+  if (printData) {
+    return (
+      <OpnameSheet
+        storeName={businessName || "Toko UsahainAja"}
+        storeType={businessType}
+        logoUrl={businessLogoUrl}
+        documentNumber={printData.opname.adjustment_number}
+        locationLabel={printData.opname.location_code}
+        dateLabel={formatDateTime(printData.opname.adjustment_date)}
+        actorName={printData.opname.created_by_name || "Staf UsahainAja"}
+        status={printData.opname.status}
+        notes={printData.opname.notes}
+        items={printData.items}
+        onBack={() => setPrintData(null)}
+      />
+    );
   }
 
   return (
@@ -290,6 +350,16 @@ export function StockOpnamePage({ onGoBack }: { onGoBack: () => void }) {
                         >
                           {selected === opname.adjustment_number ? "Tutup" : "Rincian"}
                         </button>
+                        {opname.status === "COMPLETED" && (
+                          <button
+                            type="button"
+                            className="button button--secondary"
+                            disabled={printingNumber === opname.adjustment_number}
+                            onClick={() => void handlePrint(opname.adjustment_number)}
+                          >
+                            {printingNumber === opname.adjustment_number ? "Memuat..." : "Cetak"}
+                          </button>
+                        )}
                         {opname.status === "DRAFT" && (
                           <button
                             type="button"
