@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Alert, EmptyState } from "../../components/Feedback";
 import { Icon } from "../../components/Icons";
 import { formatCurrency, formatNumber } from "../../lib/format";
@@ -36,9 +36,12 @@ export function ProductsPage({
     }
     let isMounted = true;
     const handler = setTimeout(() => {
-      api.products.list(term).then(res => {
-        if (isMounted) setServerProducts(res);
-      }).catch(console.error);
+      api.products
+        .list(term)
+        .then((res) => {
+          if (isMounted) setServerProducts(res);
+        })
+        .catch(console.error);
     }, 300);
     return () => {
       isMounted = false;
@@ -48,21 +51,35 @@ export function ProductsPage({
 
   const filtered = serverProducts;
 
+  const categoryCount = useMemo(() => {
+    return filtered.filter((p) => Boolean(p.category_name && p.category_name.trim())).length;
+  }, [filtered]);
+
+  // Kolom KATEGORI dirender kondisional bila >= 50% baris memiliki nilai
+  const showCategoryColumn = filtered.length > 0 && categoryCount / filtered.length >= 0.5;
+
   async function created(name: string) {
     await onCreated(name);
     setShowForm(false);
   }
 
   async function updated(product: Product) {
-    await onCreated(product.name); // re-fetches products in parent
+    await onCreated(product.name);
     setEditingProduct(null);
+    setShowForm(false);
   }
 
   async function remove(product: Product) {
-    if (!window.confirm(`Hapus produk "${product.name}"?`)) return;
+    const unit = getProductUnit(product);
+    const stockQty = product.min_stock !== undefined ? product.min_stock : 0;
+    const confirmed = window.confirm(
+      `Hapus "${product.name}"? Stok ${stockQty} ${unit} akan tetap tercatat di riwayat.`
+    );
+    if (!confirmed) return;
+
     try {
       await api.products.delete(getProductCode(product));
-      await onCreated(product.name); // re-fetches products in parent
+      await onCreated(product.name);
     } catch (caught) {
       alert(errorMessage(caught));
     }
@@ -70,60 +87,183 @@ export function ProductsPage({
 
   return (
     <div className="page-stack">
-      <div className="page-heading page-heading--split">
-        <div><p className="eyebrow">MASTER DATA</p><h1>Produk</h1><p className="muted">Kelola produk, satuan, harga, dan batas stok minimum.</p></div>
-        {!showForm && <button className="button button--primary" type="button" onClick={() => setShowForm(true)}><Icon name="plus" size={18} /> Tambah produk</button>}
+      <div className="page-head">
+        <div>
+          <span className="eyebrow">Katalog</span>
+          <h1>Produk</h1>
+          <p>Nama, satuan, harga jual, dan stok minimum.</p>
+        </div>
+        <div className="page-head__actions">
+          <button
+            className="button button--primary"
+            type="button"
+            onClick={() => {
+              setEditingProduct(null);
+              setShowForm(true);
+            }}
+          >
+            <Icon name="plus" size={18} /> Tambah produk
+          </button>
+        </div>
       </div>
 
       {success && <Alert tone="success">{success}</Alert>}
-      {error && <Alert><p>{error}</p><button className="link-button" type="button" onClick={onRetry}>Coba lagi</button></Alert>}
-
-      {showForm && !editingProduct && (
-        <section className="content-card form-card">
-          <div className="content-card__header"><div><h2>Produk baru</h2><p>Isi data dasar. Detail dapat dilengkapi nanti.</p></div></div>
-          <ProductForm onCreated={created} onCancel={products.length > 0 ? () => setShowForm(false) : undefined} />
-        </section>
+      {error && (
+        <Alert>
+          <p>{error}</p>
+          <button className="link-button" type="button" onClick={onRetry}>
+            Coba lagi
+          </button>
+        </Alert>
       )}
 
-      {editingProduct && (
-        <section className="content-card form-card">
-          <div className="content-card__header"><div><h2>Edit produk</h2><p>Ubah detail produk.</p></div></div>
-          <ProductForm product={editingProduct} onCreated={created} onUpdated={updated} onCancel={() => setEditingProduct(null)} />
-        </section>
-      )}
-
-      <section className="content-card">
-        <div className="content-card__header">
-          <div><h2>Semua produk</h2><p>{products.length} produk terdaftar.</p></div>
-          {products.length > 0 && <label className="search-field"><Icon name="search" size={18} /><span className="sr-only">Cari produk</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Cari produk atau SKU" /></label>}
-        </div>
-        {products.length === 0 ? (
-          <EmptyState title="Belum ada produk" description="Tambahkan produk pertama dengan formulir di atas." />
-        ) : filtered.length === 0 ? (
-          <EmptyState title="Produk tidak ditemukan" description="Coba gunakan kata pencarian lain." />
-        ) : (
-          <div className="table-scroll">
-            <table>
-              <thead><tr><th>Produk</th><th>Kategori</th><th>Satuan</th><th>Harga beli</th><th>Harga jual</th><th>Stok minimum</th><th>Pelacakan</th><th style={{ width: 80 }}><span className="sr-only">Aksi</span></th></tr></thead>
-              <tbody>{filtered.map((product) => (
-                <tr key={getProductCode(product)}>
-                  <td><div className="product-cell"><span>{product.name.slice(0, 1).toUpperCase()}</span><div><strong>{product.name}</strong><small>{product.sku || getProductCode(product)}</small></div></div></td>
-                  <td>{product.category_name || "—"}</td>
-                  <td>{getProductUnit(product)}</td>
-                  <td>{formatCurrency(product.default_purchase_price)}</td>
-                  <td><strong>{formatCurrency(product.default_selling_price)}</strong></td>
-                  <td>{formatNumber(product.min_stock)} {getProductUnit(product)}</td>
-                  <td><span className={`status-pill ${product.is_stock_tracked === false ? "" : "status-pill--good"}`}><i />{product.is_stock_tracked === false ? "Tidak" : "Aktif"}</span></td>
-                  <td className="actions-cell" style={{ display: "flex", gap: 4 }}>
-                    <button className="button button--secondary" type="button" onClick={() => { setEditingProduct(product); setShowForm(false); window.scrollTo(0, 0); }} title="Edit" style={{ padding: 8 }}><Icon name="edit" size={16} /></button>
-                    <button className="button button--secondary" type="button" onClick={() => remove(product)} title="Hapus" style={{ padding: 8, color: "var(--color-danger)" }}><Icon name="trash" size={16} /></button>
-                  </td>
-                </tr>
-              ))}</tbody>
-            </table>
+      <div className={`split ${showForm || editingProduct ? "split--wide-left" : ""}`}>
+        <section className="content-card">
+          <div className="content-card__header">
+            <div>
+              <h2>Katalog produk</h2>
+              <p>{products.length} produk terdaftar di Lokasi Utama.</p>
+            </div>
+            {products.length > 0 && (
+              <div className="table-tools">
+                <label className="search-field">
+                  <Icon name="search" size={18} />
+                  <span className="sr-only">Cari produk</span>
+                  <input
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Cari nama atau SKU"
+                  />
+                </label>
+              </div>
+            )}
           </div>
+
+          {products.length === 0 ? (
+            <EmptyState
+              title="Belum ada produk"
+              description="Tambahkan produk pertama dengan formulir di samping atau tombol di atas."
+            />
+          ) : filtered.length === 0 ? (
+            <EmptyState
+              title="Produk tidak ditemukan"
+              description="Coba gunakan kata pencarian lain."
+            />
+          ) : (
+            <div className="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Produk</th>
+                    {showCategoryColumn && <th scope="col">Kategori</th>}
+                    <th scope="col">Satuan</th>
+                    <th scope="col" className="num">
+                      Harga jual
+                    </th>
+                    <th scope="col" className="num">
+                      Stok minimum
+                    </th>
+                    <th scope="col">Status</th>
+                    <th scope="col" className="actions">
+                      Aksi
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((product) => {
+                    const code = getProductCode(product);
+                    const mark = product.name.trim().slice(0, 2).toUpperCase() || "PR";
+                    const isTracked = product.is_stock_tracked !== false;
+                    return (
+                      <tr key={code}>
+                        <td>
+                          <div className="product-cell">
+                            <span className="product-cell__mark">{mark}</span>
+                            <div>
+                              <strong>{product.name}</strong>
+                              <small>{product.sku || code}</small>
+                            </div>
+                          </div>
+                        </td>
+                        {showCategoryColumn && <td>{product.category_name || "—"}</td>}
+                        <td>{getProductUnit(product)}</td>
+                        <td className="num">{formatCurrency(product.default_selling_price)}</td>
+                        <td className="num">
+                          {formatNumber(product.min_stock ?? 0)}
+                          <span className="unit">{getProductUnit(product)}</span>
+                        </td>
+                        <td>
+                          <span
+                            className={`status-pill ${isTracked ? "status-pill--ok" : ""}`}
+                          >
+                            <i />
+                            {isTracked ? "Aktif" : "Nonaktif"}
+                          </span>
+                        </td>
+                        <td className="actions">
+                          <button
+                            type="button"
+                            className="link-button"
+                            onClick={() => {
+                              setEditingProduct(product);
+                              setShowForm(true);
+                            }}
+                          >
+                            Ubah
+                          </button>
+                          <button
+                            type="button"
+                            className="link-button"
+                            style={{
+                              color: "var(--action-danger-soft-text, #c92a2a)",
+                              marginLeft: "8px",
+                            }}
+                            onClick={() => remove(product)}
+                            title="Hapus"
+                          >
+                            Hapus
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="table-footer">
+            <span>
+              Menampilkan {filtered.length} dari {serverProducts.length} produk.
+            </span>
+            <span>
+              {!showCategoryColumn && filtered.length > 0
+                ? `Kolom KATEGORI tidak dirender: ${categoryCount} dari ${filtered.length} baris punya nilai.`
+                : ""}
+            </span>
+          </div>
+        </section>
+
+        {(showForm || editingProduct) && (
+          <section className="content-card">
+            <div className="content-card__header">
+              <div>
+                <h2>{editingProduct ? "Ubah produk" : "Tambah produk"}</h2>
+                <p>Panel form; menjadi drawer di layar sempit.</p>
+              </div>
+            </div>
+            <ProductForm
+              product={editingProduct ?? undefined}
+              onCreated={created}
+              onUpdated={updated}
+              onCancel={() => {
+                setShowForm(false);
+                setEditingProduct(null);
+              }}
+            />
+          </section>
         )}
-      </section>
+      </div>
     </div>
   );
 }
