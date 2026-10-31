@@ -3655,3 +3655,89 @@ td.doc-no {
   gap: 12px;
   min-width: 260px;
 }
+
+/* ===========================================================================
+   L9: RINGKASAN DASHBOARD STAT CARDS & CELL STACK
+   ========================================================================= */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.stat-card {
+  padding: var(--space-5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-card);
+}
+
+.stat-card > span {
+  display: block;
+  margin-bottom: var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-micro);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+.stat-card__value {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.stat-card__value strong {
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-bold);
+  font-variant-numeric: var(--num-features);
+  line-height: var(--leading-tight);
+  letter-spacing: var(--tracking-tight);
+}
+
+.stat-card__value small {
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+}
+
+.stat-card--warn {
+  border-color: var(--status-warn-border);
+  background: var(--status-warn-bg);
+}
+
+.stat-card--warn strong {
+  color: var(--status-warn-text);
+}
+
+.cell-stack strong {
+  display: block;
+  font-size: var(--text-sm);
+}
+
+.cell-stack small {
+  display: block;
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+}
+
+th.actions,
+td.actions {
+  width: 96px;
+  text-align: right;
+}
+
+@media (max-width: 900px) {
+  .stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .stat-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
