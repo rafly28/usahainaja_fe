@@ -437,6 +437,11 @@ h2 {
   width: 100%;
 }
 
+.button--tall {
+  min-height: 48px;
+  font-size: var(--text-md);
+}
+
 .link-button {
   margin-top: 4px;
   padding: 0;
@@ -2708,7 +2713,7 @@ td.doc-no {
 
 .pos-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
   gap: 16px;
   overflow-y: auto;
   padding-bottom: 24px;

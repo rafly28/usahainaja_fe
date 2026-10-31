@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
-import { Alert } from "../../components/Feedback";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Alert, EmptyState } from "../../components/Feedback";
 import { Icon } from "../../components/Icons";
 import { api, errorMessage, ApiError } from "../../lib/api";
 import { formatCurrency } from "../../lib/format";
-import { getProductCode, type Product, type SaleItem, type Location, type Contact, type CashAccount } from "../../types";
+import { getProductCode, getProductUnit, type Product, type SaleItem, type Location, type Contact, type CashAccount } from "../../types";
 
 type CartItem = SaleItem & {
   name: string;
+  unit: string;
   maxStock: number;
 };
 
@@ -19,6 +20,7 @@ export function CashierPage({
   onSaleCreated: (receiptNumber: string) => void;
   onGoToProducts: () => void;
 }) {
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState("");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [discountTotal, setDiscountTotal] = useState<number>(0);
@@ -47,13 +49,12 @@ export function CashierPage({
           api.cashAccounts.list(),
         ]);
         setLocations(locRes || []);
-        setContacts((conRes || []).filter(c => c.contact_type === 'CUSTOMER' || c.contact_type === 'BOTH'));
+        setContacts((conRes || []).filter(c => c.contact_type === "CUSTOMER" || c.contact_type === "BOTH"));
         setCashAccounts(cashRes || []);
         
         if (locRes && locRes.length > 0) setLocationCode(locRes[0]?.code ?? locRes[0]?.public_code ?? "");
         if (cashRes && cashRes.length > 0) setCashAccountCode(cashRes[0]?.code ?? cashRes[0]?.public_code ?? "");
       } catch (err) {
-        // Silently ignore or log error
         console.error("Failed to load initial data", err);
         setError("Gagal memuat lokasi/kas. Periksa koneksi lalu muat ulang.");
       }
@@ -76,14 +77,27 @@ export function CashierPage({
     (sum, item) => sum + Number(item.quantity) * Number(item.unit_price) - Number(item.discount),
     0,
   );
-  const grandTotal = subtotal - discountTotal + taxTotal;
+  const grandTotal = Math.max(0, subtotal - discountTotal + taxTotal);
+  const totalItemCount = cart.reduce((sum, item) => sum + Number(item.quantity), 0);
 
   function addToCart(product: Product) {
     if (submitting) return;
+    const code = getProductCode(product);
+    const stockQty = Number(product.quantity ?? product.stock ?? 0);
+    const unit = getProductUnit(product);
+
+    if (product.is_stock_tracked !== false && stockQty <= 0) {
+      setError(`Stok ${product.name} habis.`);
+      return;
+    }
+
     setCart((prev) => {
-      const code = getProductCode(product);
       const existing = prev.find((item) => item.product_code === code);
       if (existing) {
+        if (product.is_stock_tracked !== false && Number(existing.quantity) >= stockQty) {
+          setError(`Stok ${product.name} tersisa ${stockQty} ${unit}.`);
+          return prev;
+        }
         return prev.map((item) =>
           item.product_code === code ? { ...item, quantity: Number(item.quantity) + 1 } : item,
         );
@@ -93,10 +107,11 @@ export function CashierPage({
         {
           product_code: code,
           name: product.name,
+          unit,
           quantity: 1,
           unit_price: Number(product.default_selling_price || 0),
           discount: 0,
-          maxStock: Number(product.quantity || 0),
+          maxStock: stockQty,
         },
       ];
     });
@@ -109,7 +124,16 @@ export function CashierPage({
       return;
     }
     setCart((prev) =>
-      prev.map((item) => (item.product_code === code ? { ...item, quantity } : item)),
+      prev.map((item) => {
+        if (item.product_code === code) {
+          if (item.maxStock > 0 && quantity > item.maxStock) {
+            setError(`Stok ${item.name} tersisa ${item.maxStock} ${item.unit}.`);
+            return { ...item, quantity: item.maxStock };
+          }
+          return { ...item, quantity };
+        }
+        return item;
+      }),
     );
   }
 
@@ -193,6 +217,23 @@ export function CashierPage({
     }
   }
 
+  // F2 and F4 shortcuts
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "F2") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (e.key === "F4") {
+        e.preventDefault();
+        if (cart.length > 0 && !submitting) {
+          void checkout();
+        }
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
+
   return (
     <div className="pos-layout">
       <div className="pos-products">
@@ -200,14 +241,16 @@ export function CashierPage({
           <div>
             <p className="eyebrow">TRANSAKSI</p>
             <h1>Kasir (POS)</h1>
+            <p className="muted">Pilih produk untuk menambahkannya ke keranjang pesanan.</p>
           </div>
         </div>
 
         <div className="pos-search">
           <Icon name="search" size={20} />
           <input
+            ref={searchInputRef}
             autoFocus
-            placeholder="Cari nama, SKU, atau pindai barcode..."
+            placeholder="Cari nama, SKU, atau pindai barcode... (F2)"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -219,6 +262,7 @@ export function CashierPage({
             const inCart = cart.find((item) => item.product_code === code);
             const stockQty = Number(product.quantity ?? product.stock ?? 0);
             const isOutOfStock = product.is_stock_tracked !== false && stockQty <= 0;
+            const unit = getProductUnit(product);
 
             return (
               <button
@@ -226,6 +270,7 @@ export function CashierPage({
                 className={`pos-item-card ${inCart ? "is-in-cart" : ""} ${isOutOfStock ? "is-out-of-stock" : ""}`}
                 onClick={() => addToCart(product)}
                 type="button"
+                disabled={isOutOfStock}
               >
                 <div className="pos-item-card__header">
                   <div className="pos-item-card__abbr">
@@ -243,11 +288,11 @@ export function CashierPage({
                     <span className="pos-item-card__category">{product.category_name}</span>
                   )}
                   <div className="pos-item-card__price-row">
-                    <p className="pos-item-card__price">
+                    <p className="pos-item-card__price num">
                       {formatCurrency(product.default_selling_price)}
                     </p>
                     <span className={`stock-pill ${isOutOfStock ? "stock-pill--empty" : stockQty < 5 ? "stock-pill--low" : "stock-pill--ok"}`}>
-                      {isOutOfStock ? "Habis" : `Stok ${stockQty}`}
+                      {isOutOfStock ? "Habis" : `Stok ${stockQty} ${unit}`}
                     </span>
                   </div>
                 </div>
@@ -256,7 +301,7 @@ export function CashierPage({
           })}
           {filtered.length === 0 && (
             <div className="pos-empty-search">
-              Produk tidak ditemukan.
+              Produk tidak ditemukan.{" "}
               <button type="button" className="link-button" onClick={onGoToProducts}>
                 Tambah produk baru
               </button>
@@ -268,32 +313,49 @@ export function CashierPage({
       <div className="pos-cart">
         <div className="pos-cart__header">
           <h2>Pesanan saat ini</h2>
-          <button className="link-button" onClick={() => setCart([])}>Kosongkan</button>
+          <button
+            type="button"
+            className="link-button"
+            style={{ color: "var(--action-danger-soft-text)" }}
+            onClick={() => {
+              if (cart.length === 0) return;
+              if (window.confirm("Kosongkan keranjang pesanan?")) setCart([]);
+            }}
+          >
+            Kosongkan
+          </button>
         </div>
 
         <div className="pos-cart__items">
           {cart.length === 0 ? (
             <div className="pos-cart__empty">
-              <Icon name="shopping-cart" size={48} />
-              <p>Belum ada produk dipilih</p>
+              <EmptyState
+                title="Belum ada produk dipilih"
+                description="Pilih produk dari katalog di sebelah kiri atau tekan F2 untuk mencari."
+              />
             </div>
           ) : (
             cart.map((item) => (
               <div key={item.product_code} className="cart-item">
                 <div className="cart-item__details">
                   <strong>{item.name}</strong>
-                  <p>{formatCurrency(item.unit_price)}</p>
+                  <p className="num">{formatCurrency(item.unit_price)} per {item.unit}</p>
+                  {item.maxStock > 0 && (
+                    <small style={{ color: "var(--text-muted)" }}>
+                      Sisa {Math.max(0, item.maxStock - Number(item.quantity))} {item.unit}
+                    </small>
+                  )}
                 </div>
                 <div className="cart-item__actions">
-                  <button onClick={() => updateQuantity(item.product_code, Number(item.quantity) - 1)}>
+                  <button type="button" onClick={() => updateQuantity(item.product_code, Number(item.quantity) - 1)}>
                     -
                   </button>
-                  <span>{item.quantity}</span>
-                  <button onClick={() => updateQuantity(item.product_code, Number(item.quantity) + 1)}>
+                  <span className="num">{item.quantity}</span>
+                  <button type="button" onClick={() => updateQuantity(item.product_code, Number(item.quantity) + 1)}>
                     +
                   </button>
                 </div>
-                <div className="cart-item__total">
+                <div className="cart-item__total num">
                   {formatCurrency(Number(item.quantity) * Number(item.unit_price))}
                 </div>
               </div>
@@ -304,80 +366,110 @@ export function CashierPage({
         <div className="pos-cart__summary">
           <div className="summary-row">
             <span>Subtotal</span>
-            <span>{formatCurrency(subtotal)}</span>
+            <span className="num">{formatCurrency(subtotal)}</span>
           </div>
           <div className="summary-row text-success">
-            <span>Diskon Total</span>
-            <input
-              type="number"
-              min="0"
-              className="summary-input"
-              value={discountTotal || ""}
-              onChange={(e) => setDiscountTotal(Math.max(0, Number(e.target.value) || 0))}
-              placeholder="0"
-            />
+            <span>Diskon</span>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+              <span className="unit">Rp</span>
+              <input
+                type="number"
+                min="0"
+                className="summary-input num"
+                value={discountTotal || ""}
+                onChange={(e) => setDiscountTotal(Math.max(0, Number(e.target.value) || 0))}
+                placeholder="0"
+              />
+            </div>
           </div>
           <div className="summary-row">
-            <span>Pajak (Tax)</span>
-            <input
-              type="number"
-              min="0"
-              className="summary-input"
-              value={taxTotal || ""}
-              onChange={(e) => setTaxTotal(Math.max(0, Number(e.target.value) || 0))}
-              placeholder="0"
-            />
+            <span>Pajak</span>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+              <span className="unit">Rp</span>
+              <input
+                type="number"
+                min="0"
+                className="summary-input num"
+                value={taxTotal || ""}
+                onChange={(e) => setTaxTotal(Math.max(0, Number(e.target.value) || 0))}
+                placeholder="0"
+              />
+            </div>
           </div>
-          <div className="summary-row summary-grand">
+          <div className="summary-row summary-grand" aria-live="polite">
             <span>Total Tagihan</span>
-            <span>{formatCurrency(grandTotal)}</span>
+            <span className="num">{formatCurrency(grandTotal)}</span>
           </div>
 
-          {error && <div className="mt-2"><Alert tone="error">{error}</Alert></div>}
+          {error && <div style={{ marginTop: "var(--space-2)" }}><Alert tone="error">{error}</Alert></div>}
           {pendingReceipt && (
-            <div className="mt-2"><Alert tone="error">Draft {pendingReceipt} tersimpan. <button type="button" className="link-button" onClick={() => void retryPending()} disabled={submitting}>Coba bayar lagi</button></Alert></div>
+            <div style={{ marginTop: "var(--space-2)" }}>
+              <Alert tone="error">
+                Draft {pendingReceipt} tersimpan.{" "}
+                <button type="button" className="link-button" onClick={() => void retryPending()} disabled={submitting}>
+                  Coba bayar lagi
+                </button>
+              </Alert>
+            </div>
           )}
 
-          <div className="pos-cart__payment" style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            <select
-              value={locationCode}
-              onChange={(e) => setLocationCode(e.target.value)}
-              className="payment-select"
-            >
-              <option value="" disabled>Pilih Lokasi</option>
-              {locations.map((loc) => {
-                const code = loc.code ?? loc.public_code ?? "";
-                return <option key={code} value={code}>{loc.name}</option>;
-              })}
-            </select>
-            <select
-              value={customerCode}
-              onChange={(e) => setCustomerCode(e.target.value)}
-              className="payment-select"
-            >
-              <option value="">Pelanggan Umum (Opsional)</option>
-              {contacts.map((c) => {
-                const code = c.code ?? c.public_code ?? "";
-                return <option key={code} value={code}>{c.name}</option>;
-              })}
-            </select>
-            <select
-              value={cashAccountCode}
-              onChange={(e) => setCashAccountCode(e.target.value)}
-              className="payment-select"
-            >
-              <option value="" disabled>Pilih Akun Kas</option>
-              {cashAccounts.map((ca) => {
-                const code = ca.code ?? ca.public_code ?? "";
-                return <option key={code} value={code}>{ca.name}</option>;
-              })}
-            </select>
+          <div className="pos-cart__payment" style={{ display: "flex", flexDirection: "column", gap: "var(--space-3)", marginTop: "var(--space-3)" }}>
+            <label className="field">
+              <span>Lokasi <em>*</em></span>
+              <select
+                value={locationCode}
+                onChange={(e) => setLocationCode(e.target.value)}
+                required
+              >
+                <option value="" disabled>Pilih Lokasi</option>
+                {locations.map((loc) => {
+                  const code = loc.code ?? loc.public_code ?? "";
+                  return <option key={code} value={code}>{loc.name}</option>;
+                })}
+              </select>
+            </label>
+
+            <label className="field">
+              <span>Pelanggan</span>
+              <select
+                value={customerCode}
+                onChange={(e) => setCustomerCode(e.target.value)}
+              >
+                <option value="">Pelanggan Umum (Opsional)</option>
+                {contacts.map((c) => {
+                  const code = c.code ?? c.public_code ?? "";
+                  return <option key={code} value={code}>{c.name}</option>;
+                })}
+              </select>
+            </label>
+
+            <label className="field">
+              <span>Kas <em>*</em></span>
+              <select
+                value={cashAccountCode}
+                onChange={(e) => setCashAccountCode(e.target.value)}
+                required
+              >
+                <option value="" disabled>Pilih Akun Kas</option>
+                {cashAccounts.map((ca) => {
+                  const code = ca.code ?? ca.public_code ?? "";
+                  return <option key={code} value={code}>{ca.name}</option>;
+                })}
+              </select>
+            </label>
+
+            <div style={{ display: "flex", justifyContent: "space-between", color: "var(--text-muted)", fontSize: "var(--text-xs)", marginTop: "var(--space-2)" }}>
+              <span>{totalItemCount} item</span>
+              <span><kbd>F4</kbd> bayar</span>
+            </div>
+
             <button
-              className="button button--primary button--large button--block"
+              type="button"
+              className="button button--primary button--full button--tall"
               onClick={() => void checkout()}
               disabled={submitting || cart.length === 0}
             >
-              {submitting ? "Memproses..." : "Bayar Sekarang"}
+              {submitting ? "Memproses..." : `Bayar Sekarang · ${formatCurrency(grandTotal)}`}
             </button>
           </div>
         </div>
