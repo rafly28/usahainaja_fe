@@ -16,21 +16,55 @@ export function OpeningStockPage({
   onGoToProducts: () => void;
 }) {
   return (
-    <div className="page-stack page-stack--narrow">
-      <div className="page-heading">
-        <p className="eyebrow">PERSEDIAAN</p>
-        <h1>Catat stok awal</h1>
-        <p className="muted">Masukkan jumlah barang yang sudah tersedia sebelum transaksi pertama dicatat.</p>
+    <div className="page-stack">
+      <div className="page-head">
+        <div>
+          <span className="eyebrow">Inventaris</span>
+          <h1>Stok awal</h1>
+          <p>Saldo pembuka per lokasi, tercatat sebagai gerakan stok OPENING_BALANCE.</p>
+        </div>
+        <div className="page-head__actions">
+          <button
+            type="button"
+            className="button button--secondary"
+            onClick={onGoToProducts}
+          >
+            Kembali
+          </button>
+        </div>
       </div>
+
+      <div className="alert alert--info" style={{ marginBottom: "var(--space-5)" }}>
+        Pencatatan stok awal membuat riwayat gerakan stok dan tidak dapat ditimpa. Untuk
+        memperbaiki saldo, gunakan penyesuaian stok setelah ini.
+      </div>
+
       {success && <Alert tone="success">{success}</Alert>}
-      <section className="content-card form-card">
-        <div className="content-card__header"><div><h2>Jumlah persediaan saat ini</h2><p>Satu pencatatan untuk setiap produk di setiap lokasi.</p></div></div>
-        {products.length === 0 ? (
-          <EmptyState title="Produk belum tersedia" description="Buat produk dahulu sebelum mencatat stok awal." action={<button className="button button--primary" type="button" onClick={onGoToProducts}>Buat produk</button>} />
-        ) : (
-          <OpeningStockForm products={products} defaultLocationCode={business.default_location?.code} onRecorded={onRecorded} />
-        )}
-      </section>
+
+      {products.length === 0 ? (
+        <section className="content-card">
+          <EmptyState
+            title="Produk belum tersedia"
+            description="Buat produk dahulu sebelum mencatat stok awal."
+            action={
+              <button
+                className="button button--primary"
+                type="button"
+                onClick={onGoToProducts}
+              >
+                Buat produk
+              </button>
+            }
+          />
+        </section>
+      ) : (
+        <OpeningStockForm
+          products={products}
+          business={business}
+          onRecorded={onRecorded}
+          onCancel={onGoToProducts}
+        />
+      )}
     </div>
   );
 }
